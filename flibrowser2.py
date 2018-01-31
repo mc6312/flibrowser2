@@ -276,8 +276,6 @@ class MainWnd():
         # заканчиваем напихивать виджеты
         #
 
-        self.update_authors_alpha()
-
         self.window.show_all()
 
         #self.load_ui_state()
@@ -318,6 +316,8 @@ class MainWnd():
 
         self.check_1st_run()
 
+        self.update_authors_alpha()
+
     def check_1st_run(self):
         """Проверка на первый запуск и, при необходимости, первоначальная настройка."""
 
@@ -327,13 +327,16 @@ class MainWnd():
                 exit(1) #!!!
             else:
                 self.import_library()
+        else:
+            print('check db')
+            self.lib.check_db()
 
     def import_library(self):
         self.begin_task('Импорт библиотеки')
         try:
             print('Инициализация БД (%s)...' % self.env.libraryFilePath)
             self.task_msg('Инициализация БД')
-            self.lib.init_db()
+            self.lib.reset_db()
 
             inpxFileName = self.cfg.get_param(self.cfg.INPX_INDEX)
             print('Импорт индекса библиотеки "%s"...' % inpxFileName)

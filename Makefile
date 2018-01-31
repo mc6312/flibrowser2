@@ -16,7 +16,7 @@ app:
 	chmod 755 $(basename)
 	rm $(zipname)
 archive:
-	$(pack) $(srcarcname) *.py *. Makefile *.geany $(docs)
+	$(pack) $(srcarcname) *.py *.svg Makefile *.geany $(docs)
 distrib:
 	make app
 	$(pack) $(arcname) $(basename) $(docs)

@@ -62,16 +62,23 @@ bundleid integer'''),
 
         self.vacuumOnInit = False # потом когда-нито будет меняться из настроек
 
-    def init_db(self):
+    def check_db(self):
+        """Проверка и создание таблиц БД"""
+
+        for dbname, dbflds in self.__TABLES:
+            self.cursor.execute('''create table if not exists %s(%s)''' % (dbname, dbflds))
+
+    def reset_db(self):
         """Создание таблиц в БД.
         Сносится всё под корень!"""
 
         for dbname, dbflds in self.__TABLES:
             self.cursor.execute('''drop table if exists %s;''' % dbname)
-            self.cursor.execute('''create table %s(%s)''' % (dbname, dbflds))
 
         if self.vacuumOnInit:
             self.connection.execute('vacuum;')
+
+        self.check_db()
 
     def get_name_first_letter(self, name):
         """Возвращает первый буквенно-цифровой символ из строки name,
@@ -295,7 +302,7 @@ def __test_inpx_import(lib, inpxFileName, genreNamesFile):
                 print('%d%%\x0d' % int(fraction * 100), end='')
 
     print('Initializing DB (%s)...' % lib.dbfilename)
-    lib.init_db()
+    lib.reset_db()
 
     print('Importing INPX file "%s"...' % inpxFileName)
     importer = TestImporter(lib)

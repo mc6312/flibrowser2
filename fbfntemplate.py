@@ -123,7 +123,7 @@ class AuthorDirTitleSeriesTemplate(TitleSeriesTemplate):
         Имя файла создаётся так же, как в TitleSeriesTemplate.create_file_name()."""
 
         return (self.truncate_author_name(authorname),
-            super().create_file_name(filename, title, seriestitle, serno, authorname))
+            super().create_file_name(filename, title, seriestitle, serno, authorname)[1])
 
 
 """templates - список экземпляров классов шаблонов для UI"""

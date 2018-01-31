@@ -64,6 +64,8 @@ class BookExtractor():
         if not os.path.exists(extractdir):
             return 'Каталог для извлекаемых книг не найден.'
 
+        packtozip = self.cfg.get_param(self.cfg.EXTRACT_PACK_ZIP)
+
         librarydir = self.cfg.get_param(self.cfg.LIBRARY_DIRECTORY)
 
         em = []
@@ -131,11 +133,13 @@ class BookExtractor():
                             bookfname, bookftype, booktitle, seriestitle, serno, authorname = cur.fetchone()
                             # наличие книги с bookid уже проверено при заполнении xbundles!
 
-                            if bookfname not in znames:
+                            zbookfname = '%s.%s' % (bookfname, bookftype)
+
+                            if zbookfname not in znames:
                                 missingbooks += 1
                             else:
                                 try:
-                                    znfo = zf.getinfo(bookfname)
+                                    znfo = zf.getinfo(zbookfname)
                                     if znfo.file_size == 0:
                                         em.append('Файл "%s" в архиве "%s" имеет нулевой размер. Нечего распаковывать.' %\
                                             (bookfname, bundlefpath))
@@ -144,17 +148,17 @@ class BookExtractor():
                                     BLOCKSIZE = 1*1024*1024
 
                                     with zf.open(znfo, 'r') as srcf:
-                                        if template:
-                                            dstsubdir, dstfname = template.create_file_name(filename, title,
+                                        if fntemplate:
+                                            dstsubdir, dstfname = fntemplate.create_file_name(bookfname, booktitle,
                                                 seriestitle, serno, authorname)
                                         else:
                                             dstsubdir = ''
-                                            dstfname = filename
+                                            dstfname = bookfname
 
                                         # имя файла всегда содержит bookid - независимо от шаблона
-                                        dstfname = '%d %f.%s' % (bookid, dstfname, filetype)
+                                        dstfname = '%d %s.%s' % (bookid, dstfname, bookftype)
 
-                                        dstfpath = os.path.join(self.extractDir, dstsubdir)
+                                        dstfpath = os.path.join(extractdir, dstsubdir)
 
                                         if dstsubdir and dstsubdir not in createddirs:
                                             if not os.path.exists(dstfpath):
@@ -173,7 +177,7 @@ class BookExtractor():
                                                 dstf.write(srcf.read(iosize))
                                                 remain -= iosize
 
-                                        if pack:
+                                        if packtozip:
                                             with zipfile.ZipFile(dstfpath + '.zip', 'w', zipfile.ZIP_DEFLATED) as dstarcf:
                                                 dstarcf.write(dstfpath, dstfname)
                                             os.remove(dstfpath)
@@ -204,6 +208,8 @@ if __name__ == '__main__':
     import fbenv
     import fblib
 
+    import fbfntemplate
+
     env = fbenv.Environment()
     cfg = fbenv.Settings(env)
     cfg.load()
@@ -219,7 +225,7 @@ if __name__ == '__main__':
             print('No books in library')
             exit()
 
-        em = extractor.extract(map(lambda v: v[0], r))
+        em = extractor.extract(map(lambda v: v[0], r), fbfntemplate.AuthorDirTitleSeriesTemplate())
         if em:
             print(em)
     finally:
