@@ -282,7 +282,7 @@ def import_genre_names_list(lib, fname):
     gdict = import_genre_list_mysqldump(fname)
 
     for tag in gdict:
-        lib.cursor.execute('''insert into genrenames (tag, name, category) values (?, ?, ?)''',
+        lib.cursor.execute('insert into genrenames (tag, name, category) values (?, ?, ?)',
             (tag, *gdict[tag]))'''
 
 
