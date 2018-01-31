@@ -62,7 +62,7 @@ class AboutDialog():
 
         self.dlgabout.set_icon(self.windowicon)
 
-        self.dlgabout.set_size_request(-1, 600)
+        #self.dlgabout.set_size_request(-1, 600)
         self.dlgabout.set_copyright(COPYRIGHT)
         self.dlgabout.set_version(VERSION)
         self.dlgabout.set_program_name(TITLE)
@@ -84,6 +84,7 @@ class AboutDialog():
         self.dlgabout.set_license(slicense if slicense else 'Файл с текстом GPL не найден.\nЧитайте https://www.gnu.org/licenses/gpl.html')
 
         self.dlgabout.set_website(URL)
+        self.dlgabout.set_website_label(URL)
 
         self.dlgabout.add_credit_section('Сляпано во славу', ['Азатота', 'Йог-Сотота', 'Ктулху', 'Шаб-Ниггурат', 'и прочей кодлы Великих Древних'])
         self.dlgabout.add_credit_section('Особая благодарность', ['Левой ноге автора'])

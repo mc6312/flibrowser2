@@ -23,7 +23,7 @@ TITLE = 'Flibrowser'
 VERSION = '2.0.1'
 TITLE_VERSION = '%s v%s' % (TITLE, VERSION)
 COPYRIGHT = 'Copyright 2018 MC-6312'
-URL = '<пока нету>' # будет ссылка на гитлерхаб?
+URL = 'https://github.com/mc6312/flibrowser2'
 
 
 DISPLAY_DATE_FORMAT = '%m.%d.%Y' # ибо рыгал я на поддержку локалей
