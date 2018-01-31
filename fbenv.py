@@ -131,6 +131,19 @@ class Settings(Database):
     EXTRACT_FILE_NAMING_SCHEME = 'extract_file_naming_scheme'
     EXTRACT_PACK_ZIP = 'extract_pack_zip'
 
+    __REQUIRED_PARAMETERS = (LIBRARY_DIRECTORY, INPX_INDEX)
+
+    def has_required_settings(self):
+        """Проверка на наличие в БД настроек необходимых параметров.
+        Возвращает булевское значение."""
+
+        nmissing = 0
+        for pname in self.__REQUIRED_PARAMETERS:
+            if not self.get_param(pname, '').strip():
+                nmissing += 1
+
+        return nmissing == 0
+
     def init_tables(self):
         """Создание таблицы для хранения настроек"""
 

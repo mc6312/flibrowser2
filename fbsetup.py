@@ -116,7 +116,13 @@ class SetupDialog():
         self.cfg.set_param(self.cfg.LIBRARY_DIRECTORY, self.libraryDirectory)
         self.cfg.set_param(self.cfg.INPX_INDEX, self.libraryIndexFile)
 
-    def run(self):
+    def run(self, title=None):
+        """Запуск диалога.
+
+        run - строка заголовка или None."""
+
+        if title:
+            self.dialog.set_title(title)
         self.dialog.show_all()
 
         while True:
