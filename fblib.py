@@ -23,7 +23,7 @@
 
 
 from fbinpx import INPXFile
-from fbsqlgenlist import import_genre_list_mysqldump
+#from fbsqlgenlist import import_genre_list_mysqldump
 from fbdb import *
 import sqlite3
 import datetime
@@ -269,6 +269,7 @@ filename, filetype, date, language, keywords, bundleid) values (?,?,?,?,?,?,?,?,
             bundleid))
 
 
+'''Отключено, на время или совсем.
 def import_genre_names_list(lib, fname):
     """Импорт Импорт списка жанров (тэгов) из SQL-файла
     в таблицу genrenames БД.
@@ -282,7 +283,7 @@ def import_genre_names_list(lib, fname):
 
     for tag in gdict:
         lib.cursor.execute('''insert into genrenames (tag, name, category) values (?, ?, ?)''',
-            (tag, *gdict[tag]))
+            (tag, *gdict[tag]))'''
 
 
 def __test_inpx_import(lib, inpxFileName, genreNamesFile):
