@@ -33,6 +33,7 @@ from fbabout import AboutDialog
 from fbsetup import SetupDialog
 
 import os.path
+import datetime
 
 from time import time, sleep
 
@@ -128,15 +129,15 @@ class MainWnd():
         # морда будет из двух вертикальных панелей
         #
 
-        roothbox = Gtk.HBox(spacing=WIDGET_SPACING) # потом, возможно, будет Gtk.HPaned
-        self.ctlvbox.pack_start(roothbox, True, True, 0)
+        self.roothpaned = Gtk.HPaned()
+        self.ctlvbox.pack_start(self.roothpaned, True, True, 0)
 
         #
         # в левой панели - алфавитный список авторов
         # (из двух отдельных виджетов Gtk.TreeView)
         #
         fr = Gtk.Frame.new('Авторы')
-        roothbox.pack_start(fr, False, False, 0)
+        self.roothpaned.pack1(fr, True, False)
 
         apanel = Gtk.VBox(spacing=WIDGET_SPACING)
         apanel.set_border_width(WIDGET_SPACING)
@@ -182,9 +183,10 @@ class MainWnd():
         #
 
         fr = Gtk.Frame.new('Книги')
-        roothbox.pack_end(fr, True, True, 0)
+        self.roothpaned.pack2(fr, True, False)
 
         bpanel = Gtk.VBox(spacing=WIDGET_SPACING)
+        bpanel.set_size_request(480, -1) #!!!
         bpanel.set_border_width(WIDGET_SPACING)
         fr.add(bpanel)
 
@@ -327,14 +329,14 @@ class MainWnd():
                 self.import_library()
         else:
             #print('check db')
-            self.lib.check_db()
+            self.lib.init_tables()
 
     def import_library(self):
         self.begin_task('Импорт библиотеки')
         try:
             print('Инициализация БД (%s)...' % self.env.libraryFilePath)
             self.task_msg('Инициализация БД')
-            self.lib.reset_db()
+            self.lib.reset_tables()
 
             inpxFileName = self.cfg.get_param(self.cfg.INPX_INDEX)
             print('Импорт индекса библиотеки "%s"...' % inpxFileName)
@@ -505,6 +507,8 @@ class MainWnd():
         # для фильтрации по дате сделать втык в запрос подобного:
         #  and (date > "2014-01-01") and (date < "2016-12-31")
 
+        datenow = datetime.datetime.now()
+
         while True:
             r = cur.fetchone()
             if r is None:
@@ -518,7 +522,7 @@ class MainWnd():
             date = datetime.datetime.strptime(r[4], DB_DATE_FORMAT)
             # тут, возможно, будет код для показа соответствия "дата - цвет 'свежести' книги"
             # и/или фильтрация по дате
-            datestr = date.strftime(DISPLAY_DATE_FORMAT)
+            datestr = '<span color="%s">⬛</span> %s' % (get_book_age_color(datenow, date), date.strftime(DISPLAY_DATE_FORMAT))
 
             # дополнительная фильтрация вручную, т.к. sqlite3 "из коробки"
             # не умеет в collation, и вообще что-то проще сделать не через запросы SQL

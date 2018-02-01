@@ -135,7 +135,7 @@ class SetupDialog():
                 else:
                     self.flush_settings()
                     break
-            elif r == Gtk.ResponseType.CANCEL:
+            elif r in (Gtk.ResponseType.CANCEL, Gtk.ResponseType.DELETE_EVENT):
                 break
 
         self.dialog.hide()

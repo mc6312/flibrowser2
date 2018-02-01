@@ -31,7 +31,17 @@ DB_DATE_FORMAT = '%Y-%m-%d'
 
 
 class Database():
-    """Тупая обёртка над sqlite3.Connection."""
+    """Тупая обёртка над sqlite3.Connection.
+
+    TABLES  - список или кортеж, содержащий описания таблиц БД -
+              кортежи из двух элементов вида
+              ('имя таблицы', 'типы столбцов'),
+              где 'типы столбцов' - строка с перечислением типов
+              столбцов в синтаксисе sqlite3.
+              Это поле используется методами init_tables()
+              и reset_tables(), и должно быть перекрыто классом-потомком."""
+
+    TABLES = ()
 
     def __init__(self, dbfname):
         """Инициализация.
@@ -40,6 +50,7 @@ class Database():
         self.dbfilename = dbfname
         self.connection = None # будет присвоено из .connect()
         self.cursor = None # --//--
+        self.vacuumOnInit = False # потом когда-нито будет меняться из настроек, если понадобится
 
     def connect(self):
         """Соединение с БД"""
@@ -57,6 +68,33 @@ class Database():
             self.connection.close()
             self.cursor = None
             self.connection = None
+
+    def init_tables(self):
+        """Создание таблиц в БД, если они не существуют.
+        Если поле TABLES не содержит описаний столбцов,
+        метод не делает ничего."""
+
+        if self.connection is None:
+            raise Exception('%s.init_tables(): БД не подключена!' % self.__class__.__name__)
+        else:
+            for dbname, dbflds in self.TABLES:
+                self.cursor.execute('''create table if not exists %s(%s)''' % (dbname, dbflds))
+
+    def reset_tables(self):
+        """Удаление и пересоздание таблиц в БД.
+        Если поле TABLES не содержит описаний столбцов,
+        метод не делает ничего."""
+
+        if self.connection is None:
+            raise Exception('%s.init_tables(): БД не подключена!' % self.__class__.__name__)
+        else:
+            for dbname, dbflds in self.TABLES:
+                self.cursor.execute('''drop table if exists %s;''' % dbname)
+
+            if self.vacuumOnInit:
+                self.connection.execute('vacuum;')
+
+        self.init_tables()
 
 
 if __name__ == '__main__':

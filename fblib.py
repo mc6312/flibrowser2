@@ -32,7 +32,7 @@ import os.path
 
 
 class LibraryDB(Database):
-    __TABLES = (# главная таблица - список книг
+    TABLES = (# главная таблица - список книг
         ('books', '''bookid integer primary key,
 authorid integer,
 title varchar(100), serid integer, serno integer,
@@ -56,29 +56,6 @@ bundleid integer'''),
         ('genrenames', '''tag varchar(64), name varchar(128), category varchar(128)'''),
         # таблица имён файлов архивов с книгами
         ('bundles', '''bundleid integer primary key, filename varchar(256)'''))
-
-    def __init__(self, dbfname):
-        super().__init__(dbfname)
-
-        self.vacuumOnInit = False # потом когда-нито будет меняться из настроек
-
-    def check_db(self):
-        """Проверка и создание таблиц БД"""
-
-        for dbname, dbflds in self.__TABLES:
-            self.cursor.execute('''create table if not exists %s(%s)''' % (dbname, dbflds))
-
-    def reset_db(self):
-        """Создание таблиц в БД.
-        Сносится всё под корень!"""
-
-        for dbname, dbflds in self.__TABLES:
-            self.cursor.execute('''drop table if exists %s;''' % dbname)
-
-        if self.vacuumOnInit:
-            self.connection.execute('vacuum;')
-
-        self.check_db()
 
     def get_name_first_letter(self, name):
         """Возвращает первый буквенно-цифровой символ из строки name,

@@ -117,6 +117,8 @@ class Environment():
 class Settings(Database):
     """Работа с БД настроек"""
 
+    TABLES = (('settings', 'name text primary key, value text'),)
+
     def __init__(self, env):
         """Инициализация.
 
@@ -126,7 +128,8 @@ class Settings(Database):
 
     LIBRARY_DIRECTORY = 'inpx_directory'
     INPX_INDEX = 'inpx_index'
-    GENRE_NAMES_PATH = 'genre_names_path'
+    #GENRE_NAMES_PATH = 'genre_names_path'
+    IMPORT_LANGUAGES = 'import_languages'
     EXTRACT_TO_DIRECTORY = 'extract_to_directory'
     EXTRACT_FILE_NAMING_SCHEME = 'extract_file_naming_scheme'
     EXTRACT_PACK_ZIP = 'extract_pack_zip'
@@ -143,17 +146,6 @@ class Settings(Database):
                 nmissing += 1
 
         return nmissing == 0
-
-    def init_tables(self):
-        """Создание таблицы для хранения настроек"""
-
-        self.cursor.execute('create table if not exists settings(name text primary key, value text);')
-
-    def reset_tables(self):
-        """Полная очистка настроек"""
-
-        self.cursor.execute('drop table if exists settings;')
-        self.init_tables()
 
     def load(self):
         self.connect()
