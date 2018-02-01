@@ -79,18 +79,22 @@ class TreeViewer():
         """Класс для параметров создания Gtk.TreeViewColumn"""
 
         def __init__(self, index, title='', editable=False,
-            expand=False, align=0.0):
+            expand=False, align=0.0, markup=False):
             """index    - номер столбца в List|TreeStore,
             title       - отображаемое в заголовке название,
             editable    - (булевское) запрет/разрешение редактирования ячейки,
             expand      - (булевское) фиксированная/автоматическая ширина,
-            align       - (0.0..1.0) выравнивание содержимого ячейки."""
+            align       - (0.0..1.0) выравнивание содержимого ячейки,
+            markup      - (булевское) для столбцов типа GObject.TYPE_STRING:
+                          True - использовать Pango Markup при отображении столбца,
+                          False - отображать как простой текст."""
 
             self.index = index
             self.title = title
             self.editable = editable
             self.expand = expand
             self.align = align
+            self.markup = markup
 
     def __init__(self, coltypes, coldefs, islist=True):
         """Создает объекты.
@@ -137,7 +141,7 @@ class TreeViewer():
                     if coldef.expand \
                     else Pango.EllipsizeMode.NONE
                 crt.props.editable = coldef.editable
-                crtpar = 'text'
+                crtpar = 'text' if not coldef.markup else 'markup'
             elif ctype == Pixbuf:
                 crt = Gtk.CellRendererPixbuf()
                 crt.props.xalign = coldef.align

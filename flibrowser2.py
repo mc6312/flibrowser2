@@ -195,13 +195,11 @@ class MainWnd():
                 GObject.TYPE_STRING,# title
                 GObject.TYPE_STRING,# series
                 GObject.TYPE_STRING,# serno
-                GObject.TYPE_STRING,# date
-                GObject.TYPE_STRING),# language
+                GObject.TYPE_STRING),# date
             (TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True),
                 TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0),
                 TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True),
-                TreeViewer.ColDef(self.COL_BOOK_DATE, 'Дата'),
-                TreeViewer.ColDef(self.COL_BOOK_LANG, 'Яз.')))
+                TreeViewer.ColDef(self.COL_BOOK_DATE, 'Дата', markup=True)))
 
         self.booklist.view.connect('motion-notify-event', self.booklist_mouse_moved)
 
@@ -328,7 +326,7 @@ class MainWnd():
             else:
                 self.import_library()
         else:
-            print('check db')
+            #print('check db')
             self.lib.check_db()
 
     def import_library(self):
@@ -537,7 +535,6 @@ class MainWnd():
                 str(serno) if serno > 0 else '', # serno
                 seriestitle, # seriesnames.title
                 datestr, # date
-                r[5], # language
                 ))
 
         self.booklist.view.set_model(self.booklist.store)

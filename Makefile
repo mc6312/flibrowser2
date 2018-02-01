@@ -16,7 +16,7 @@ app:
 	chmod 755 $(basename)
 	rm $(zipname)
 archive:
-	$(pack) $(srcarcname) *.py *.svg Makefile *.geany $(docs)
+	$(pack) $(srcarcname) *.py *.svg Makefile *.sh *.geany $(docs)
 distrib:
 	make app
 	$(pack) $(arcname) $(basename) $(docs)
@@ -25,3 +25,5 @@ backup:
 	mv $(srcarcname) $(backupdir)
 update:
 	$(packer) x -y $(backupdir)$(srcarcname)
+commit:
+	git commit -a -m "$(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')"
