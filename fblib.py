@@ -118,12 +118,17 @@ class INPXImporter(INPXFile):
     def str_hash(self, s):
         return hash(s.lower())
 
-    def __init__(self, lib):
+    def __init__(self, lib, cfg):
         """Инициализация.
-        lib - экземпляр LibraryDB"""
+        lib - экземпляр LibraryDB,
+        cfg - экземпляр fbenv.Settings."""
 
         super().__init__()
         self.library = lib
+        self.cfg = cfg
+
+        self.allowedLanguages = self.cfg.get_param_set(self.cfg.IMPORT_LANGUAGES,
+            self.cfg.DEFAULT_IMPORT_LANGUAGES)
 
         # временные словари для создания вспомогательных таблиц
         # т.к. проверять повторы select'ами при добавлении записей,
@@ -142,10 +147,6 @@ class INPXImporter(INPXFile):
 
         self.library.cursor.execute('select last_insert_rowid();')
         return self.library.cursor.fetchone()[0]
-
-    def is_allowed_language(self, lang):
-        # временная заглушка!
-        return lang == 'ru'
 
     def flush_record(self, record):
         """Метод для спихивания разобранной записи с нормализованными полями
@@ -176,6 +177,10 @@ class INPXImporter(INPXFile):
         # то ли книжка физически удалена, то ли "удалена" по требованию
         # правообглодателя
         if record[INPXFile.REC_DEL]:
+            return
+
+        # фильтрация по языкам
+        if record[INPXFile.REC_LANG] not in self.allowedLanguages:
             return
 
         #

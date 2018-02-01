@@ -42,6 +42,8 @@ class SetupDialog():
         self.env = env
         self.cfg = cfg
 
+        self.settingsChanged = False
+
         self.dialog = Gtk.Dialog(parent=wparent, title='Настройки')
 
         #self.dialog.set_size_request(800, 600)
@@ -58,7 +60,11 @@ class SetupDialog():
         # в случае нажатия кнопки "ОК" и правильности всех настроек!
         #
         self.libraryDirectory = self.cfg.get_param(self.cfg.LIBRARY_DIRECTORY, os.path.expanduser('~'))
-        self.libraryIndexFile = self.cfg.get_param(self.cfg.INPX_INDEX, os.path.expanduser('~'))
+        self.libraryIndexFile = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX, os.path.expanduser('~'))
+
+        self.libraryLanguages = self.cfg.get_param_set(self.cfg.IMPORT_LANGUAGES, self.cfg.DEFAULT_IMPORT_LANGUAGES)
+        self.libraryLanguages.update(self.cfg.DEFAULT_IMPORT_LANGUAGES)
+        # всегда добавляется множество (set) языков, приколоченных гвоздями
 
         #
         #
@@ -89,24 +95,54 @@ class SetupDialog():
 
         grid.append_col(self.libindexchooser, True)
 
+        #
+        #
+        #
+        grid.append_row('Допустимые языки:')
+
+        self.liblanguagesentry = Gtk.Entry()
+        self.liblanguagesentry.set_text(' '.join(self.libraryLanguages))
+        grid.append_col(self.liblanguagesentry, True)
+
     def get_data(self):
         """Забирает значения из виджетов.
         Возвращает None или пустую строку в случае правильных значений,
         иначе возвращает строку с сообщением об ошибке."""
 
-        self.libraryDirectory = self.libdirchooser.get_filename()
-        if not self.libraryDirectory:
+        self.settingsChanged = False
+
+        #
+        v = self.libdirchooser.get_filename()
+        if not v:
             return 'Не указан каталог библиотеки'
 
-        if not os.path.isdir(self.libraryDirectory):
+        if not os.path.isdir(v):
             return 'Каталог библиотеки указан неправильно'
 
-        self.libraryIndexFile = self.libindexchooser.get_filename()
-        if not self.libraryIndexFile:
+        if v != self.libraryDirectory:
+            self.libraryDirectory = v
+            self.settingsChanged = True
+
+        #
+        v = self.libindexchooser.get_filename()
+        if not v:
             return 'Не указан файл индекса библиотеки'
 
-        if not os.path.isfile(self.libraryIndexFile):
+        if not os.path.isfile(v):
             return 'Неправильно указан файл индекса библиотеки'
+
+        if v != self.libraryIndexFile:
+            self.libraryIndexFile = v
+            self.settingsChanged = True
+
+        #
+        v = set(self.liblanguagesentry.get_text().lower().split(None))
+        v.update(self.cfg.DEFAULT_IMPORT_LANGUAGES)
+        # всегда добавляется множество (set) языков, приколоченных гвоздями
+
+        if v != self.libraryLanguages:
+            self.libraryLanguages = v
+            self.settingsChanged = True
 
         return None
 
@@ -114,7 +150,8 @@ class SetupDialog():
         """"Наконец-то складываем настройки в БД настроек."""
 
         self.cfg.set_param(self.cfg.LIBRARY_DIRECTORY, self.libraryDirectory)
-        self.cfg.set_param(self.cfg.INPX_INDEX, self.libraryIndexFile)
+        self.cfg.set_param(self.cfg.IMPORT_INPX_INDEX, self.libraryIndexFile)
+        self.cfg.set_param_set(self.cfg.IMPORT_LANGUAGES, self.libraryLanguages)
 
     def run(self, title=None):
         """Запуск диалога.
@@ -133,7 +170,8 @@ class SetupDialog():
                 if e:
                     msg_dialog(self.dialog, 'Ошибка', e, Gtk.MessageType.ERROR)
                 else:
-                    self.flush_settings()
+                    if self.settingsChanged:
+                        self.flush_settings()
                     break
             elif r in (Gtk.ResponseType.CANCEL, Gtk.ResponseType.DELETE_EVENT):
                 break

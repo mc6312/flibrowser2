@@ -133,16 +133,6 @@ class INPXFile():
 
         pass
 
-    def is_allowed_language(self, lang):
-        """Фильтрация по языкам.
-        Функция должна возвращать True для допустимых языков,
-        False для остальных.
-        Вызывается из parse_inpx_file().
-        Записи, для которых ф-я возвращает False - игнорируются.
-        Метод может быть перекрыт классом-потомком."""
-
-        return True
-
     def import_inpx_file(self, fpath, show_progress=None):
         """Разбор файла .inpx.
 
@@ -196,8 +186,6 @@ class INPXFile():
 
                                 # LANG    - язык (строка в нижнем регистре)
                                 book_language = srcrec[self.REC_LANG].lower()
-                                if not self.is_allowed_language(book_language):
-                                    continue
 
                                 # LIBID   - id книги (целое)
                                 book_libid = int(srcrec[self.REC_LIBID])

@@ -49,9 +49,49 @@ class MainWnd():
     COL_BOOK_DATE, COL_BOOK_LANG = range(6)
 
     def destroy(self, widget, data=None):
-        #self.update_ui_state(ctrls=True) # только состояние кнопок - потому что размер окна здесь уже неправильный
-        #self.save_ui_state()
         Gtk.main_quit()
+
+    def wnd_configure_event(self, wnd, event):
+        """Сменились размер/положение окна"""
+
+        if not self.windowMaximized:
+            self.cfg.set_param(self.cfg.MAIN_WINDOW_X, event.x)
+            self.cfg.set_param(self.cfg.MAIN_WINDOW_Y, event.y)
+
+            self.cfg.set_param(self.cfg.MAIN_WINDOW_W, event.width)
+            self.cfg.set_param(self.cfg.MAIN_WINDOW_H, event.height)
+
+    def wnd_state_event(self, widget, event):
+        """Сменилось состояние окна"""
+
+        self.windowMaximized = bool(event.new_window_state & Gdk.WindowState.MAXIMIZED)
+        self.cfg.set_param_bool(self.cfg.MAIN_WINDOW_MAXIMIZED, self.windowMaximized)
+
+    def load_window_state(self):
+        """Загрузка и установка размера и положения окна"""
+
+        wx = self.cfg.get_param_int(self.cfg.MAIN_WINDOW_X, None)
+        if wx is not None:
+            wy = self.cfg.get_param_int(self.cfg.MAIN_WINDOW_Y, None)
+            self.window.move(wx, wy)
+
+            ww = self.cfg.get_param_int(self.cfg.MAIN_WINDOW_W, 0) # все равно GTK не даст меньше допустимого съёжить
+            wh = self.cfg.get_param_int(self.cfg.MAIN_WINDOW_H, 0)
+
+            self.window.resize(ww, wh)
+
+        wm = self.cfg.get_param_bool(self.cfg.MAIN_WINDOW_MAXIMIZED, False)
+        if wm:
+            self.window.maximize()
+
+        self.task_events() # грязный хакЪ, дабы окно смогло поменять размер,
+        # без спросу пошевелить HPaned, и т.п.
+
+        pp = self.cfg.get_param_int(self.cfg.MAIN_WINDOW_HPANED_POS, 0)
+        #print('loaded paned pos=%d' % pp)
+        self.roothpaned.set_position(pp)
+
+        self.windowStateLoaded = True
 
     def task_events(self):
         # даем прочихаться междумордию
@@ -76,12 +116,12 @@ class MainWnd():
         self.task_events()
 
     def __create_ui(self):
-        #!!!self.uistate = MainWndSettings(os.path.join(library.cfgDir, u'uistate'))
+        self.windowMaximized = False
+        self.windowStateLoaded = False
 
         self.window = Gtk.ApplicationWindow(Gtk.WindowType.TOPLEVEL)
-        #self.window.connect('configure_event', self.wnd_configure_event)
-        #self.window.connect('window_state_event', self.wnd_state_event)
-        #self.window.connect('size-allocate', self.wnd_size_allocate)
+        self.window.connect('configure_event', self.wnd_configure_event)
+        self.window.connect('window_state_event', self.wnd_state_event)
         self.window.connect('destroy', self.destroy)
 
         self.window.set_title(TITLE_VERSION)
@@ -130,6 +170,7 @@ class MainWnd():
         #
 
         self.roothpaned = Gtk.HPaned()
+        self.roothpaned.connect('notify::position', self.roothpaned_moved)
         self.ctlvbox.pack_start(self.roothpaned, True, True, 0)
 
         #
@@ -182,13 +223,13 @@ class MainWnd():
         # в правой панели - список книг соотв. автора и управление распаковкой
         #
 
-        fr = Gtk.Frame.new('Книги')
-        self.roothpaned.pack2(fr, True, False)
+        self.bookframe = Gtk.Frame.new('Книги')
+        self.roothpaned.pack2(self.bookframe, True, False)
 
         bpanel = Gtk.VBox(spacing=WIDGET_SPACING)
         bpanel.set_size_request(480, -1) #!!!
         bpanel.set_border_width(WIDGET_SPACING)
-        fr.add(bpanel)
+        self.bookframe.add(bpanel)
 
         # список книг
 
@@ -278,7 +319,8 @@ class MainWnd():
 
         self.window.show_all()
 
-        #self.load_ui_state()
+        #print('loading window state')
+        self.load_window_state()
 
     def __init__(self, lib, env, cfg):
         """Инициализация междумордия и загрузка настроек.
@@ -338,10 +380,10 @@ class MainWnd():
             self.task_msg('Инициализация БД')
             self.lib.reset_tables()
 
-            inpxFileName = self.cfg.get_param(self.cfg.INPX_INDEX)
+            inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
             print('Импорт индекса библиотеки "%s"...' % inpxFileName)
             self.task_msg('Импорт индекса библиотеки')
-            importer = INPXImporter(self.lib)
+            importer = INPXImporter(self.lib, self.cfg)
             importer.import_inpx_file(inpxFileName, self.task_progress)
 
             self.update_authors_alpha()
@@ -349,8 +391,15 @@ class MainWnd():
         finally:
             self.end_task()
 
+    def roothpaned_moved(self, paned, data=None):
+        pp = paned.get_position()
+        #print('hpaned moved, wsl=%s, pos=%d' % (self.windowStateLoaded, pp))
+        if self.windowStateLoaded:
+            self.cfg.set_param_int(self.cfg.MAIN_WINDOW_HPANED_POS, pp)
+
     def change_settings(self):
-        self.dlgsetup.run()
+        if self.dlgsetup.run() == Gtk.ResponseType.OK and self.dlgsetup.settingsChanged:
+            self.import_library()
 
     def extractfntemplatecb_changed(self, cb, data=None):
         self.extractTemplateIndex = cb.get_active()
@@ -499,6 +548,10 @@ class MainWnd():
         self.booklist.view.set_model(None)
         self.booklist.store.clear()
 
+        cur = self.lib.cursor.execute('select count(*) from books;')
+        r = cur.fetchone()
+        stotalbooks = '?' if r is None else '%d' % r[0]
+
         # куда-то сюда присобачить выковыр названия цикла!
         cur = self.lib.cursor.execute('''select bookid,books.title,serno,seriesnames.title,date,language
             from books inner join seriesnames on seriesnames.serid=books.serid
@@ -508,11 +561,14 @@ class MainWnd():
         #  and (date > "2014-01-01") and (date < "2016-12-31")
 
         datenow = datetime.datetime.now()
+        nbooks = 0
 
         while True:
             r = cur.fetchone()
             if r is None:
                 break
+
+            nbooks += 1
 
             # поля, которые могут потребовать доп. телодвижений
             title = r[1]
@@ -545,6 +601,8 @@ class MainWnd():
         self.booklist.view.set_search_column(self.COL_BOOK_TITLE)
         self.booklist.view.set_search_equal_func(self.booklist_search_func)
 
+        self.bookframe.set_label('Книги (%d из %s)' % (nbooks, stotalbooks))
+
     def booklist_search_func(self, model, column, key, _iter, data=None):
         """Штатная функция сравнивает key с началом строки в столбце column,
         а эта будет искать любое вхождение key в нескольких столбцах.
@@ -566,13 +624,12 @@ class MainWnd():
 
 
 def main():
-
     env = Environment()
     cfg = Settings(env)
 
     cfg.load()
     try:
-        #inpxFileName = cfg.get_param(cfg.INPX_INDEX)
+        #inpxFileName = cfg.get_param(cfg.IMPORT_INPX_INDEX)
         #genreNamesFile = cfg.get_param(cfg.GENRE_NAMES_PATH)
 
         lib = LibraryDB(env.libraryFilePath)

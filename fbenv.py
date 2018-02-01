@@ -126,15 +126,37 @@ class Settings(Database):
 
         super().__init__(env.configFilePath)
 
+    # параметры библиотеки
+    # каталог с архивами книг
     LIBRARY_DIRECTORY = 'inpx_directory'
-    INPX_INDEX = 'inpx_index'
+    # индексный файл библиотеки для импорта
+    IMPORT_INPX_INDEX = 'inpx_index'
     #GENRE_NAMES_PATH = 'genre_names_path'
+    # импортируемые языки
     IMPORT_LANGUAGES = 'import_languages'
+
+    DEFAULT_IMPORT_LANGUAGES = {'ru'} # русская языка будет вовеки приколочена гвоздями!
+
+    # параметры извлечения книг
+    # каталог для извлечения книг
     EXTRACT_TO_DIRECTORY = 'extract_to_directory'
+    # имя шаблона для именования извлекаемых книг
     EXTRACT_FILE_NAMING_SCHEME = 'extract_file_naming_scheme'
+    # паковать ли извлекаемые книги
     EXTRACT_PACK_ZIP = 'extract_pack_zip'
 
-    __REQUIRED_PARAMETERS = (LIBRARY_DIRECTORY, INPX_INDEX)
+    # параметры/состояние интерфейса
+    # координаты основного окна
+    MAIN_WINDOW_X = 'main_window_x'
+    MAIN_WINDOW_Y = 'main_window_y'
+    MAIN_WINDOW_W = 'main_window_w'
+    MAIN_WINDOW_H = 'main_window_h'
+    # состояние развёрнутости основного окна
+    MAIN_WINDOW_MAXIMIZED = 'main_window_maximized'
+    # положение разделителя панелей основного окна
+    MAIN_WINDOW_HPANED_POS = 'main_window_hpaned_pos'
+
+    __REQUIRED_PARAMETERS = (LIBRARY_DIRECTORY, IMPORT_INPX_INDEX)
 
     def has_required_settings(self):
         """Проверка на наличие в БД настроек необходимых параметров.
@@ -159,32 +181,35 @@ class Settings(Database):
 
         vname       - имя параметра,
         defvalue    - None или значение по умолчанию, которое ф-я вернет,
-                      если параметра нет в БД, или у него пустое значение;
-                      defvalue = None - функция генерирует исключение."""
+                      если параметра нет в БД, или у него пустое значение."""
 
         self.cursor.execute('select value from settings where name=? limit 1;',
             (vname,))
 
         r = self.cursor.fetchone()
-        if r is None:
-            if defvalue is None:
-                raise KeyError('Отсутствует значение параметра "%s" в таблице "settings" файла "%s"' % (vname, self.dbfilename))
-            else:
-                return defvalue
-        else:
-            return r[0]
+
+        return defvalue if r is None else r[0]
 
     def get_param_int(self, vname, defvalue=None):
-        """Получение цельночисленного параметра из БД настроек.
-        В случае ошибки генерирует исключение."""
+        """Получение цельночисленного параметра из БД настроек."""
 
-        return int(self.get_param(vname, defvalue))
+        v = self.get_param(vname, defvalue)
+
+        return int(v) if v is not None else None
 
     def get_param_bool(self, vname, defvalue=None):
-        """Получение булевского параметра из БД настроек.
-        В случае ошибки генерирует исключение."""
+        """Получение булевского параметра из БД настроек."""
 
-        return self.get_param_int(vname, defvalue) != 0
+        v = self.get_param_int(vname, defvalue)
+
+        return v != 0 if v is not None else None
+
+    def get_param_set(self, vname, defvalue=None):
+        """Получение параметра-множества строк из БД настроек
+        (в БД оно хранится в виде строки, разделённой пробелами)."""
+
+        v = self.get_param(vname, ' '.join(defvalue) if defvalue is not None else None)
+        return set(v.split(None)) if v is not None else None
 
     def set_param(self, vname, vvalue):
         """Установка параметра в БД настроек.
@@ -204,6 +229,12 @@ class Settings(Database):
         """Установка булевского параметра в БД настроек."""
 
         self.set_param(vname, str(int(vvalue))) # булевские хранятся как целые числа!
+
+    def set_param_set(self, vname, vvalue):
+        """Установка параметра-множества строк в БД настроек.
+        Множества строк хранятся в БД в виде строки, разделённой пробелами."""
+
+        self.set_param(vname, ' '.join(vvalue))
 
     def __str__(self):
         """Для отладки"""
@@ -239,7 +270,7 @@ if __name__ == '__main__':
         #print(cfg.get_param('test', None))
 
         #cfg.set_param(cfg.LIBRARY_DIRECTORY, './')
-        #cfg.set_param(cfg.INPX_INDEX, './flibusta_fb2_local.inpx')
+        #cfg.set_param(cfg.IMPORT_INPX_INDEX, './flibusta_fb2_local.inpx')
         #cfg.set_param(cfg.GENRE_NAMES_PATH, './lib.libgenrelist.sql')
         cfg.set_param_bool(cfg.EXTRACT_PACK_ZIP, False)
 
