@@ -27,3 +27,4 @@ update:
 	$(packer) x -y $(backupdir)$(srcarcname)
 commit:
 	git commit -a -m "$(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')"
+	git push
