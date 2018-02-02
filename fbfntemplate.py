@@ -126,9 +126,47 @@ class AuthorDirTitleSeriesTemplate(TitleSeriesTemplate):
             super().create_file_name(filename, title, seriestitle, serno, authorname)[1])
 
 
+class AuthorDirSeriesDirTitleTemplate(Template):
+    DISPLAY = 'Имя автора/Название цикла/номер - Название книги'
+    NAME = 'authordir-seriesdir-num-title'
+
+    def create_file_name(self, filename, title, seriestitle, serno, authorname):
+        """См. значение DISPLAY."""
+
+        subdir = [self.truncate_author_name(authorname)]
+
+        if seriestitle:
+            subdir.append(self.truncate_str(seriestitle))
+
+        name = []
+        if seriestitle and serno:
+            name.append('%d - ' % serno)
+
+        name.append(self.truncate_str(title))
+
+        return (path_join(*subdir), ''.join(name))
+
+class SeriesDirAuthorTitleTemplate(Template):
+    DISPLAY = 'Название цикла/номер - Имя автора - Название книги'
+    NAME = 'seriesdir-num-author-title'
+
+    def create_file_name(self, filename, title, seriestitle, serno, authorname):
+        """См. значение DISPLAY."""
+
+        name = []
+        if seriestitle and serno:
+            name.append('%d - ' % serno)
+
+        name.append('%s - ' % self.truncate_author_name(authorname))
+
+        name.append(self.truncate_str(title))
+
+        return (self.truncate_str(seriestitle), ''.join(name))
+
 """templates - список экземпляров классов шаблонов для UI"""
 
-templates = [Template(), TitleSeriesTemplate(), AuthorDirTitleSeriesTemplate()]
+templates = [Template(), TitleSeriesTemplate(), AuthorDirTitleSeriesTemplate(),
+    AuthorDirSeriesDirTitleTemplate(), SeriesDirAuthorTitleTemplate()]
 
 """templatenames - словарь, где ключи - имена шаблонов, а значения - номера элементов списка templates"""
 
@@ -146,16 +184,14 @@ if __name__ == '__main__':
     names = ['Иванов Иван Иваныч, Вольдемар де Вульф де Мордехай де Акакий ибн Вольдемарыч Некрофекалоидов-оглы, Сидоров Сидор Сидорыч, Петров Пётр Петрович',
         'Волков Сергей Юрьевич, Галковский Дмитрий Евгеньевич, Зыкин Д, Кара-Мурза Сергей Георгиевич, Миронин Сигизмунд Сигизмундович, Скорынин Р, Федотова П']
 
-    for name in names:
+    """for name in names:
         ol = len(name)
         name = tpl.truncate_author_name(name)
-        print('%d/%d, "%s"' % (ol, len(name), name))
+        print('%d/%d, "%s"' % (ol, len(name), name))"""
 
     ttitle = 'Освежевание летающих и подвижных объектов подручным сельскохозяйственным инструментом в условиях средней полосы. Методы и приёмы.'
     tseriesname = 'Расчленение, освежевание и др. для чайников'
 
-    tpl = TitleSeriesTemplate()
-    print(tpl.create_file_name('13666', ttitle, tseriesname, 13, names[0]))
-
-    tpl = AuthorDirTitleSeriesTemplate()
-    print(tpl.create_file_name('13666', ttitle, tseriesname, 13, names[0]))
+    for tpl in templates:
+        print(tpl.NAME)
+        print(tpl.create_file_name('13666', ttitle, tseriesname, 13, names[0]))

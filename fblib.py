@@ -40,13 +40,13 @@ filename varchar(256), filetype varchar(16),
 date varchar(10), language varchar(2), keywords varchar(128),
 bundleid integer'''),
         # таблица имён авторов
-        ('authornames', '''authorid integer primary key, name varchar(100)'''),
-        # таблица индекса по первым символам имён авторов
-        ('authornamealpharefs', '''alpha varchar(1), authorid integer'''),
+        ('authornames', '''authorid integer primary key, alpha varchar(1), name varchar(100)'''),
         # первые символы имён авторов
         ('authornamealpha', '''alpha varchar(1) primary key'''),
         # таблица названий циклов/сериалов
-        ('seriesnames', '''serid integer primary key, title varchar(100)'''),
+        ('seriesnames', '''serid integer primary key, alpha varchar(1), title varchar(100)'''),
+        # первые символы названий циклов/сериалов
+        ('seriesnamealpha', '''alpha varchar(1) primary key'''),
         # таблица тэгов
         ('genretags', '''genreid integer primary key, tag varchar(64)'''),
         # таблица соответствий жанровых тэгов книжкам
@@ -188,49 +188,78 @@ class INPXImporter(INPXFile):
         # записи из таблицы books
         #
 
-        def __add_table_unic_rec(unicdict, tablename, valstr, keycolname, valcolname):
+        def __add_table_unic_rec(unicdict, tablename, colnames, colvalues, ixuniccol):
             """Добавление уникального значения в таблицу БД.
-            Используется ТОЛЬКО для таблиц с двумя столбцами вида "primary key; строка".
+            Используется ТОЛЬКО для таблиц, где 1й столбец - integer primary key!
 
             unicdict    - экземпляр класса [Norm]StrHashIdDict,
             tablename   - имя таблицы в БД,
-            valstr      - значение помещаемого в таблицу поля,
-            keycolname  - имя столбца БД, в котором хранится primary key,
-            valcolname  - имя столбца БД для значения.
+            colnames    - список или кортеж строк - имён столбцов,
+            colvalues   - список или кортеж значений столбцов, кроме primary key;
+                          т.е. размер списка д.б. на 1 меньше, чем colnames:
+                          при добавлении в таблицу значение для первого
+                          столбца генерирует эта функция!
+            ixuniccol   - номер поля в списке colvalues, по которому
+                          проверяется уникальность.
 
             Возвращает primary key соотв. таблицы."""
 
-            isunic, valkey = unicdict.is_unical(valstr)
+            if isinstance(colvalues, tuple):
+                colvalues = list(colvalues)
+
+            isunic, valkey = unicdict.is_unical(colvalues[ixuniccol])
+
             if isunic:
-                self.library.cursor.execute('''insert into %s (%s, %s) values (?,?);''' %\
-                    (tablename, keycolname, valcolname),
-                    (valkey, valstr))
+                query = 'insert into %s (%s) values (%s);' % (tablename,
+                    ','.join(colnames), ','.join('?' * (len(colvalues) + 1)))
+
+                self.library.cursor.execute(query, [valkey] + colvalues)
 
             return valkey
 
         # seriesnames
-        serid = __add_table_unic_rec(self.seriesnames, 'seriesnames', record[INPXFile.REC_SERIES], 'serid', 'title')
+        seriestitle = record[INPXFile.REC_SERIES]
+
+        if seriestitle:
+            # в алфавитный индекс попадут только книги с названием цикла
+            stitlealpha = self.library.get_name_first_letter(seriestitle)
+            self.library.cursor.execute('''insert or replace into seriesnamealpha (alpha) values (?);''', (stitlealpha,))
+        else:
+            stitlealpha = ''
+
+        serid = __add_table_unic_rec(self.seriesnames, 'seriesnames',
+            ('serid', 'alpha', 'title'),
+            (stitlealpha, seriestitle),
+            1)
 
         # bundles
-        bundleid = __add_table_unic_rec(self.bundles, 'bundles', record[INPXFile.REC_BUNDLE], 'bundleid', 'filename')
+        bundleid = __add_table_unic_rec(self.bundles, 'bundles',
+            ('bundleid', 'filename'), (record[INPXFile.REC_BUNDLE],),
+            0)
 
         # authornames
         authorname = record[INPXFile.REC_AUTHOR]
-        authorid = __add_table_unic_rec(self.authornames, 'authornames', authorname, 'authorid', 'name')
+        anamealpha = self.library.get_name_first_letter(authorname)
 
-        # authornamealpharefs
-        aname1l = self.library.get_name_first_letter(authorname)
-        self.library.cursor.execute('''insert or replace into authornamealpha (alpha) values (?);''', aname1l)
-        self.library.cursor.execute('''insert into authornamealpharefs (alpha, authorid) values (?,?);''',
-            (aname1l, authorid))
+        authorid = __add_table_unic_rec(self.authornames, 'authornames',
+            ('authorid', 'alpha', 'name'),
+            (anamealpha, authorname),
+            1)
 
+        self.library.cursor.execute('''insert or replace into authornamealpha (alpha) values (?);''', (anamealpha,))
+
+        # genresnames: genreid, name (str)
         # genresnames: genreid, name (str)
         # genres: genreid, bookid (int!)
 
         genreids = set()
         for genrename in record[INPXFile.REC_GENRE]:
             if genrename:
-                genreids.add(__add_table_unic_rec(self.genretags, 'genretags', genrename, 'genreid', 'tag'))
+                genreid = __add_table_unic_rec(self.genretags, 'genretags',
+                    ('genreid', 'tag'),
+                    (genrename,),
+                    0)
+                genreids.add(genreid)
 
         bookid = record[INPXFile.REC_LIBID]
 
@@ -268,12 +297,12 @@ def import_genre_names_list(lib, fname):
             (tag, *gdict[tag]))'''
 
 
-def __test_inpx_import(lib, inpxFileName, genreNamesFile):
+def __test_inpx_import(lib, cfg, inpxFileName): #, genreNamesFile):
     class TestImporter(INPXImporter):
         PROGRESS_DELAY = 1000
 
-        def __init__(self, lib):
-            super().__init__(lib)
+        def __init__(self, lib, cfg):
+            super().__init__(lib, cfg)
 
             self.progressdelay = self.PROGRESS_DELAY
 
@@ -285,15 +314,15 @@ def __test_inpx_import(lib, inpxFileName, genreNamesFile):
                 print('%d%%\x0d' % int(fraction * 100), end='')
 
     print('Initializing DB (%s)...' % lib.dbfilename)
-    lib.reset_db()
+    lib.reset_tables()
 
     print('Importing INPX file "%s"...' % inpxFileName)
-    importer = TestImporter(lib)
+    importer = TestImporter(lib, cfg)
     importer.import_inpx_file(inpxFileName, importer.show_progress)
     print()
 
-    print('Importing genre name list "%s"...' % genreNamesFile)
-    import_genre_names_list(lib, genreNamesFile)
+    #print('Importing genre name list "%s"...' % genreNamesFile)
+    #import_genre_names_list(lib, genreNamesFile)
 
     lib.connection.commit()
 
@@ -306,23 +335,6 @@ def __test_inpx_import(lib, inpxFileName, genreNamesFile):
         print(r)"""
 
 
-def __test_alpha_authornames_index(lib):
-    from time import time
-
-    t0 = time()
-    aindex = lib.get_author_alphabet_dict()
-    t1 = time() - t0
-    print('%d letters in index; %g sec.' % (len(aindex), t1))
-
-    #return
-
-    for l1 in sorted(aindex.keys()):
-        print('%s:' % l1)
-
-        for aid, aname in aindex[l1]:
-            print('  %.6d  %s' % (aid, aname))
-
-
 if __name__ == '__main__':
     print('[test]')
 
@@ -332,14 +344,12 @@ if __name__ == '__main__':
     cfg = Settings(env)
     cfg.load()
 
-    inpxFileName = cfg.get_param(cfg.INPX_INDEX)
-    genreNamesFile = cfg.get_param(cfg.GENRE_NAMES_PATH)
+    inpxFileName = cfg.get_param(cfg.IMPORT_INPX_INDEX)
 
     lib = LibraryDB(env.libraryFilePath)
     lib.connect()
     try:
-        #__test_inpx_import(lib, inpxFileName, genreNamesFile)
-        #__test_alpha_authornames_index(lib)
-        pass
+        __test_inpx_import(lib, cfg, inpxFileName)#, genreNamesFile)
+        #pass
     finally:
         lib.disconnect()

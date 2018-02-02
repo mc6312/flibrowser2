@@ -32,10 +32,191 @@ import fbfntemplate
 from fbabout import AboutDialog
 from fbsetup import SetupDialog
 
+from collections import namedtuple
+
 import os.path
 import datetime
 
 from time import time, sleep
+
+
+class AlphaListChooser():
+    """Обёртка над двумя таблицами - алфавитным списком, содержащим
+    столбец alpha (см. далее colAlpha), и списком имён, содержащим
+    столбцы id, alpha, name (название столбца alpha должно совпадать
+    в обеих таблицах) и двумя Gtk.TreeView,
+    в первом из которых - алфавитный список,
+    во втором - список имён (например, первые буквы имён авторов
+    и имена авторов)."""
+
+    tableparams = namedtuple('tableparams', 'alphatablename nametablename colnameid colalpha colnametext emptyalphatext onnameselected')
+    """Параметры таблицы, с которой работает AlphaListChooser:
+
+        alphatablename      - имя таблицы в БД для списка имён
+        nametablename       - имя таблицы в БД для алфавитного списка
+        colnameid           - имя столбца с primary key в таблице имён
+        colalpha            - имя столбца с 1й буквой (alpha) в таблицах alphatable и nametable
+        colnametext         - имя столбца с отображаемым текстом в nametable
+        emptyalphatext      - значение, отображаемое в alphalist, если alpha==''
+        onnameselected      - функция или метод, обрабатывающие событие
+                              "выбран элемент в списке namelist"
+                              функция должна принимать один параметр -
+                              значение selectedNameId."""
+
+    # столбцы алфавитного списка
+    COL_ALPHA_VALUE, COL_ALPHA_DISPLAY = range(2)
+
+    # столбцы списка имён
+    COL_NAME_ID, COL_NAME_TEXT = range(2)
+
+    def __init__(self, lib):
+        """Инициализация объекта и создание виджетов.
+
+        lib - экземпляр fblib.LibraryDB."""
+
+        self.lib = lib
+
+        self.tableParams = None # сюда будет присвоен экземпляр AlphaListChooser.tableparams
+
+        # буква, выбранная в self.alphalist
+        self.selectedAlpha = None
+
+        # строка для фильтрации self.namelist
+        self.namePattern = ''
+
+        #
+        self.box = Gtk.VBox(spacing=WIDGET_SPACING)
+
+        hbox = Gtk.HBox(spacing=WIDGET_SPACING)
+        self.box.pack_start(hbox, True, True, 0)
+
+        # алфавитный список
+        self.alphalist = TreeViewer((GObject.TYPE_STRING, GObject.TYPE_STRING),
+            (TreeViewer.ColDef(self.COL_ALPHA_DISPLAY, '', False, True),))
+
+        self.alphalist.view.set_headers_visible(False)
+        self.alphalist.view.set_enable_search(True)
+        hbox.pack_start(self.alphalist.window, False, False, 0)
+
+        self.alphalist.selection.set_mode(Gtk.SelectionMode.SINGLE)
+        self.alphalist.selection.connect('changed', self.alphalist_selected)
+
+        # список имён
+        self.namelist = TreeViewer(
+            # id, name
+            (GObject.TYPE_INT, GObject.TYPE_STRING),
+            (TreeViewer.ColDef(self.COL_NAME_TEXT, '', False, True),))
+
+        self.namelist.view.set_headers_visible(False)
+        self.namelist.view.set_enable_search(True)
+        self.namelist.view.set_tooltip_column(self.COL_NAME_TEXT)
+
+        self.namelist.selection.connect('changed', self.namelist_selected)
+
+        hbox.pack_end(self.namelist.window, True, True, 0)
+
+        hpanel = Gtk.HBox(spacing=WIDGET_SPACING)
+        self.box.pack_end(hpanel, False, False, 0)
+
+        create_labeled_entry(hpanel, 'Имя:', self.nameentry_changed, True)
+
+    def connect_db_table(self, params):
+        """Настройка на таблицу БД.
+
+        params - экземпляр AlphaListChooser.tableparams."""
+
+        self.tableParams = params
+
+        self.update_alphalist()
+
+    def update_alphalist(self):
+        """Обновление алфавитного списка"""
+
+        if self.tableParams is None:
+            return
+
+        # первые буквы имён авторов
+        self.alphalist.view.set_model(None)
+        self.alphalist.store.clear()
+
+        q = 'select %s from %s order by %s;' %\
+            (self.tableParams.colalpha, self.tableParams.alphatablename,
+            self.tableParams.colalpha)
+        #print(q)
+        cur = self.lib.cursor.execute(q)
+
+        while True:
+            r = cur.fetchone()
+            if r is None:
+                break
+
+            s = r[0]
+            self.alphalist.store.append((s, s if s else self.tableParams.emptyalphatext))
+
+        self.alphalist.view.set_model(self.alphalist.store)
+        self.alphalist.view.set_search_column(self.COL_ALPHA_DISPLAY)
+
+    def update_namelist(self):
+        """Обновление списка имён"""
+
+        if self.tableParams is None:
+            return
+
+        self.namelist.view.set_model(None)
+        self.namelist.store.clear()
+
+        if self.selectedAlpha is not None:
+            cur = self.lib.cursor.execute('select %s,%s from %s where %s="%s" order by %s;' %\
+                (self.tableParams.colnameid, self.tableParams.colnametext,
+                self.tableParams.nametablename,
+                self.tableParams.colalpha, self.selectedAlpha,
+                self.tableParams.colnametext))
+
+            while True:
+                r = cur.fetchone()
+                if r is None:
+                    break
+
+                # фильтрация по начальным буквам имени автора.
+                # вручную, ибо лень прикручивать collation к sqlite3
+
+                if self.namePattern and not r[1].lower().startswith(self.namePattern):
+                    continue
+
+                self.namelist.store.append((r[0], r[1]))
+
+        self.namelist.view.set_model(self.namelist.store)
+        self.namelist.view.set_search_column(self.COL_NAME_TEXT)
+
+    def alphalist_selected(self, sel, data=None):
+        """Обработка события выбора элемента(ов) в списке первых букв имён"""
+
+        rows = self.alphalist.selection.get_selected_rows()[1]
+        if rows:
+            self.selectedAlpha = self.alphalist.store.get_value(self.alphalist.store.get_iter(rows[0]), self.COL_ALPHA_VALUE)
+        else:
+            self.selectedAlpha = None
+
+        #print('"%s"' % self.selectedAlpha)
+
+        self.update_namelist()
+
+    def namelist_selected(self, sel, data=None):
+        """Обработка события выбора элемента(ов) в списке имён"""
+
+        rows = self.namelist.selection.get_selected_rows()[1]
+
+        if rows:
+            self.selectedNameId = self.namelist.store.get_value(self.namelist.store.get_iter(rows[0]), self.COL_NAME_ID)
+        else:
+            self.selectedNameId = None
+
+        if callable(self.tableParams.onnameselected):
+            self.tableParams.onnameselected(self.selectedNameId)
+
+    def nameentry_changed(self, entry, data=None):
+        self.namePattern = entry.get_text().strip().lower()
+        self.update_names()
 
 
 class MainWnd():
@@ -115,6 +296,12 @@ class MainWnd():
         self.progressbar.set_fraction(fraction)
         self.task_events()
 
+    def update_books_by_authorid(self, authorid):
+        self.update_books('authorid', authorid)
+
+    def update_books_by_serid(self, serid):
+        self.update_books('serid', serid)
+
     def __create_ui(self):
         self.windowMaximized = False
         self.windowStateLoaded = False
@@ -173,51 +360,51 @@ class MainWnd():
         self.roothpaned.connect('notify::position', self.roothpaned_moved)
         self.ctlvbox.pack_start(self.roothpaned, True, True, 0)
 
+        self.booklist = None
+        # а реальное значение сюда сунем потом.
+        # ибо alphachooser будет дёргать MainWnd.update_books_*,
+        # и на момент вызова поле MainWnd.booklist уже должно существовать
+
         #
         # в левой панели - алфавитный список авторов
         # (из двух отдельных виджетов Gtk.TreeView)
         #
-        fr = Gtk.Frame.new('Авторы')
+        self.alphaChooserParamsByAuthorId = AlphaListChooser.tableparams(
+            'authornamealpha', 'authornames',
+            'authorid', 'alpha', 'name', '<>',
+            self.update_books_by_authorid)
+        self.alphaChooserParamsBySerId = AlphaListChooser.tableparams(
+            'seriesnamealpha', 'seriesnames',
+            'serid', 'alpha', 'title', '<>',
+            self.update_books_by_serid)
+
+        fr = Gtk.Frame.new()
         self.roothpaned.pack1(fr, True, False)
 
-        apanel = Gtk.VBox(spacing=WIDGET_SPACING)
-        apanel.set_border_width(WIDGET_SPACING)
-        apanel.set_size_request(384, -1) #!!!
-        fr.add(apanel)
+        avbox = Gtk.VBox(spacing=WIDGET_SPACING)
+        avbox.set_border_width(WIDGET_SPACING)
+        avbox.set_size_request(384, -1) # минимальная ширина - пока приколочена гвоздями
+        fr.add(avbox)
+
+        # переключатель поиска по авторам или циклам
 
         ahbox = Gtk.HBox(spacing=WIDGET_SPACING)
-        apanel.pack_start(ahbox, True, True, 0)
+        avbox.pack_start(ahbox, False, False, 0)
 
-        # первые буквы имён авторов
-        self.authalphalist = TreeViewer((GObject.TYPE_STRING,),
-            (TreeViewer.ColDef(self.COL_AUTHALPHA_L1, '', False, True),))
+        self.rbauthors = Gtk.RadioButton.new_with_label(None, 'Авторы')
+        ahbox.pack_start(self.rbauthors, False, False, 0)
 
-        self.authalphalist.view.set_headers_visible(False)
-        self.authalphalist.view.set_enable_search(True)
-        ahbox.pack_start(self.authalphalist.window, False, False, 0)
+        self.rbseries = Gtk.RadioButton.new_with_label_from_widget(self.rbauthors, 'Циклы/сериалы')
+        ahbox.pack_start(self.rbseries, False, False, 0)
 
-        #self.authalphalist.selection.set_mode(Gtk.SelectionMode.SINGLE)
-        self.authalphalist.selection.connect('changed', self.authalphalist_selected)
+        # алфавитный список авторов или циклов
+        self.alphachooser = AlphaListChooser(self.lib)
+        self.alphachooser.connect_db_table(self.alphaChooserParamsByAuthorId)
+        avbox.pack_end(self.alphachooser.box, True, True, 0)
 
-        # имена авторов
-        self.authlist = TreeViewer(
-            # authorid, name
-            (GObject.TYPE_INT, GObject.TYPE_STRING),
-            (TreeViewer.ColDef(self.COL_AUTH_NAME, '', False, True),))
-
-        self.authlist.view.set_headers_visible(False)
-        self.authlist.view.set_enable_search(True)
-
-        self.authlist.view.set_tooltip_column(self.COL_AUTH_NAME)
-
-        self.authlist.selection.connect('changed', self.authlist_selected)
-
-        ahbox.pack_end(self.authlist.window, True, True, 0)
-
-        ahpanel = Gtk.HBox(spacing=WIDGET_SPACING)
-        apanel.pack_end(ahpanel, False, False, 0)
-
-        create_labeled_entry(ahpanel, 'Имя:', self.authornameentry_changed, True)
+        self.rbauthors.connect('toggled', self.switch_alphachooser, self.alphaChooserParamsByAuthorId)
+        self.rbseries.connect('toggled', self.switch_alphachooser, self.alphaChooserParamsBySerId)
+        self.rbauthors.set_active(True)
 
         #
         # в правой панели - список книг соотв. автора и управление распаковкой
@@ -347,18 +534,14 @@ class MainWnd():
         #
         #
         #
-        self.authorNamePattern = '' # строка для фильтрации списка авторов
         self.booklistTitlePattern = ''
-
-        self.selectedAuthorAlpha = None # присваивается при выборе первой буквы автора в списке
-        self.selectedAuthorId = 0 # присваивается при выборе автора в списке
 
         # создаём междумордие
         self.__create_ui()
 
         self.check_1st_run()
 
-        self.update_authors_alpha()
+        self.alphachooser.update_alphalist()
 
     def check_1st_run(self):
         """Проверка на первый запуск и, при необходимости, первоначальная настройка."""
@@ -386,10 +569,14 @@ class MainWnd():
             importer = INPXImporter(self.lib, self.cfg)
             importer.import_inpx_file(inpxFileName, self.task_progress)
 
-            self.update_authors_alpha()
+            self.alphachooser.update_alphalist()
 
         finally:
             self.end_task()
+
+    def switch_alphachooser(self, rbtn, tparams):
+        if tparams is not None:
+            self.alphachooser.connect_db_table(tparams)
 
     def roothpaned_moved(self, paned, data=None):
         pp = paned.get_position()
@@ -411,10 +598,6 @@ class MainWnd():
 
     def extracttozipbtn_clicked(self, cb, data=None):
         self.cfg.set_param_bool(self.cfg.EXTRACT_PACK_ZIP, cb.get_active())
-
-    def authornameentry_changed(self, entry, data=None):
-        self.authorNamePattern = entry.get_text().strip().lower()
-        self.update_authors()
 
     def booklisttitlepattern_changed(self, entry, data=None):
         self.booklistTitlePattern = entry.get_text().strip().lower()
@@ -475,127 +658,68 @@ class MainWnd():
         finally:
             self.end_task()
 
-    def update_authors_alpha(self):
-        """Обновление списка авторов"""
+    def update_books(self, idcolname, idcolvalue):
+        """Обновление списка книг.
 
-        # первые буквы имён авторов
-        self.authalphalist.view.set_model(None)
-        self.authalphalist.store.clear()
+        idcolname   - имя столбца в таблице books для запроса к БД,
+        idcolvalue  - значение столбца для запроса."""
 
-        cur = self.lib.cursor.execute('''select alpha from authornamealpha order by alpha;''')
-        while True:
-            r = cur.fetchone()
-            if r is None:
-                break
+        if self.booklist is None:
+            return
 
-            self.authalphalist.store.append((r[0],))
-
-        self.authalphalist.view.set_model(self.authalphalist.store)
-        self.authalphalist.view.set_search_column(self.COL_AUTHALPHA_L1)
-
-    def get_list_column(self, listview, column):
-        #listview.get_value(self.booklist.get_iter(ix), 0)
-        pass
-
-    def authalphalist_selected(self, sel, data=None):
-        """Обработка события выбора элемента(ов) в списке первых букв имён авторов"""
-
-        rows = self.authalphalist.selection.get_selected_rows()[1]
-        if rows:
-            self.selectedAuthorAlpha = self.authalphalist.store.get_value(self.authalphalist.store.get_iter(rows[0]), self.COL_AUTHALPHA_L1)
-        else:
-            self.selectedAuthorAlpha = None
-
-        self.update_authors()
-
-    def update_authors(self):
-        self.authlist.view.set_model(None)
-        self.authlist.store.clear()
-
-        if self.selectedAuthorAlpha:
-            cur = self.lib.cursor.execute('''select authorid,name from authornames where authorid in
-                (select authorid from authornamealpharefs where alpha=?) order by name;''', (self.selectedAuthorAlpha,))
-
-            while True:
-                r = cur.fetchone()
-                if r is None:
-                    break
-
-                # фильтрация по начальным буквам имени автора.
-                # вручную, ибо лень прикручивать collation к sqlite3
-
-                if self.authorNamePattern and not r[1].lower().startswith(self.authorNamePattern):
-                    continue
-
-                self.authlist.store.append((r[0], r[1]))
-
-        self.authlist.view.set_model(self.authlist.store)
-        self.authlist.view.set_search_column(self.COL_AUTH_NAME)
-
-    def authlist_selected(self, sel, data=None):
-        """Обработка события выбора элемента(ов) в списке имён авторов"""
-
-        rows = self.authlist.selection.get_selected_rows()[1]
-
-        if rows:
-            self.selectedAuthorId = self.authlist.store.get_value(self.authlist.store.get_iter(rows[0]), self.COL_AUTH_ID)
-        else:
-            self.selectedAuthorId = None
-
-        self.update_books()
-
-    def update_books(self):
         self.booklist.view.set_model(None)
         self.booklist.store.clear()
 
         cur = self.lib.cursor.execute('select count(*) from books;')
         r = cur.fetchone()
         stotalbooks = '?' if r is None else '%d' % r[0]
-
-        # куда-то сюда присобачить выковыр названия цикла!
-        cur = self.lib.cursor.execute('''select bookid,books.title,serno,seriesnames.title,date,language
-            from books inner join seriesnames on seriesnames.serid=books.serid
-            where authorid=?
-            order by seriesnames.title, serno, books.title, date;''', (self.selectedAuthorId,))
-        # для фильтрации по дате сделать втык в запрос подобного:
-        #  and (date > "2014-01-01") and (date < "2016-12-31")
-
-        datenow = datetime.datetime.now()
         nbooks = 0
 
-        while True:
-            r = cur.fetchone()
-            if r is None:
-                break
+        if idcolvalue is not None:
+            q = '''select bookid,books.title,serno,seriesnames.title,date,language
+                from books inner join seriesnames on seriesnames.serid=books.serid
+                where books.%s=?
+                order by seriesnames.title, serno, books.title, date;''' % idcolname
+            #print(q)
+            cur = self.lib.cursor.execute(q, (idcolvalue,))
+            # для фильтрации по дате сделать втык в запрос подобного:
+            #  and (date > "2014-01-01") and (date < "2016-12-31")
 
-            nbooks += 1
+            datenow = datetime.datetime.now()
 
-            # поля, которые могут потребовать доп. телодвижений
-            title = r[1]
-            seriestitle = r[3]
+            while True:
+                r = cur.fetchone()
+                if r is None:
+                    break
 
-            # подразумеваятся, что в соотв. поле БД точно есть хоть какая-то дата
-            date = datetime.datetime.strptime(r[4], DB_DATE_FORMAT)
-            # тут, возможно, будет код для показа соответствия "дата - цвет 'свежести' книги"
-            # и/или фильтрация по дате
-            datestr = '<span color="%s">⬛</span> %s' % (get_book_age_color(datenow, date), date.strftime(DISPLAY_DATE_FORMAT))
+                nbooks += 1
 
-            # дополнительная фильтрация вручную, т.к. sqlite3 "из коробки"
-            # не умеет в collation, и вообще что-то проще сделать не через запросы SQL
+                # поля, которые могут потребовать доп. телодвижений
+                title = r[1]
+                seriestitle = r[3]
 
-            if self.booklistTitlePattern:
-                if title.lower().find(self.booklistTitlePattern) < 0 \
-                    and seriestitle.lower().find(self.booklistTitlePattern) < 0:
-                    continue
+                # подразумеваятся, что в соотв. поле БД точно есть хоть какая-то дата
+                date = datetime.datetime.strptime(r[4], DB_DATE_FORMAT)
+                # тут, возможно, будет код для показа соответствия "дата - цвет 'свежести' книги"
+                # и/или фильтрация по дате
+                datestr = '<span color="%s">⬛</span> %s' % (get_book_age_color(datenow, date), date.strftime(DISPLAY_DATE_FORMAT))
 
-            serno = r[2]
+                # дополнительная фильтрация вручную, т.к. sqlite3 "из коробки"
+                # не умеет в collation, и вообще что-то проще сделать не через запросы SQL
 
-            self.booklist.store.append((r[0], # bookid
-                title, # books.title
-                str(serno) if serno > 0 else '', # serno
-                seriestitle, # seriesnames.title
-                datestr, # date
-                ))
+                if self.booklistTitlePattern:
+                    if title.lower().find(self.booklistTitlePattern) < 0 \
+                        and seriestitle.lower().find(self.booklistTitlePattern) < 0:
+                        continue
+
+                serno = r[2]
+
+                self.booklist.store.append((r[0], # bookid
+                    title, # books.title
+                    str(serno) if serno > 0 else '', # serno
+                    seriestitle, # seriesnames.title
+                    datestr, # date
+                    ))
 
         self.booklist.view.set_model(self.booklist.store)
         self.booklist.view.set_search_column(self.COL_BOOK_TITLE)
@@ -632,9 +756,13 @@ def main():
         #inpxFileName = cfg.get_param(cfg.IMPORT_INPX_INDEX)
         #genreNamesFile = cfg.get_param(cfg.GENRE_NAMES_PATH)
 
+        dbexists = os.path.exists(env.libraryFilePath)
         lib = LibraryDB(env.libraryFilePath)
         lib.connect()
         try:
+            if not dbexists:
+                lib.init_tables()
+
             mainwnd = MainWnd(lib, env, cfg)
             mainwnd.main()
         finally:
