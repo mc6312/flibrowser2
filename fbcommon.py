@@ -20,13 +20,13 @@
 
 
 TITLE = 'Flibrowser'
-VERSION = '2.1.0'
+VERSION = '2.1.1'
 TITLE_VERSION = '%s v%s' % (TITLE, VERSION)
 COPYRIGHT = 'Copyright 2018 MC-6312'
 URL = 'https://github.com/mc6312/flibrowser2'
 
 
-DISPLAY_DATE_FORMAT = '%m.%d.%Y' # ибо рыгал я на поддержку локалей
+DISPLAY_DATE_FORMAT = '%d.%m.%Y' # ибо рыгал я на поддержку локалей
 
 
 if __name__ == '__main__':
