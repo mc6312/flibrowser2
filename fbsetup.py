@@ -44,7 +44,7 @@ class SetupDialog():
 
         self.settingsChanged = False
 
-        self.dialog = Gtk.Dialog(parent=wparent, title='Настройки')
+        self.dialog = Gtk.Dialog(parent=wparent, title='Настройки', use_header_bar=True)
 
         #self.dialog.set_size_request(800, 600)
         self.dialog.add_buttons('gtk-ok', Gtk.ResponseType.OK, 'gtk-cancel', Gtk.ResponseType.CANCEL)

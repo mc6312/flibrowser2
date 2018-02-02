@@ -118,7 +118,8 @@ class AlphaListChooser():
         hpanel = Gtk.HBox(spacing=WIDGET_SPACING)
         self.box.pack_end(hpanel, False, False, 0)
 
-        create_labeled_entry(hpanel, 'Имя:', self.nameentry_changed, True)
+        entry = create_labeled_entry(hpanel, 'Имя:', self.nameentry_changed, True)
+        entry_setup_clear_icon(entry)
 
     def connect_db_table(self, params):
         """Настройка на таблицу БД.
@@ -297,10 +298,14 @@ class MainWnd():
         self.task_events()
 
     def update_books_by_authorid(self, authorid):
-        self.update_books('authorid', authorid)
+        self.bookListUpdateColName = 'authorid'
+        self.bookListUpdateColValue = authorid
+        self.update_books()
 
     def update_books_by_serid(self, serid):
-        self.update_books('serid', serid)
+        self.bookListUpdateColName = 'serid'
+        self.bookListUpdateColValue = serid
+        self.update_books()
 
     def __create_ui(self):
         self.windowMaximized = False
@@ -311,7 +316,15 @@ class MainWnd():
         self.window.connect('window_state_event', self.wnd_state_event)
         self.window.connect('destroy', self.destroy)
 
-        self.window.set_title(TITLE_VERSION)
+        headerbar = Gtk.HeaderBar()
+        headerbar.set_show_close_button(True)
+        headerbar.set_decoration_layout('menu:minimize,maximize,close')
+        headerbar.set_title(TITLE)
+        headerbar.set_subtitle(VERSION)
+
+        self.window.set_titlebar(headerbar)
+
+        #self.window.set_title(TITLE_VERSION)
 
         self.window.set_size_request(1024, 768)
         self.window.set_border_width(WIDGET_SPACING)
@@ -338,19 +351,21 @@ class MainWnd():
 
         # Gtk.Toolbar - фпень, он уродский; меню тоже - слишком жирно из-за 3х элементов городить
         # пока так, а там видно будет
-        hbtb = Gtk.HBox(spacing=WIDGET_SPACING)
-        self.ctlvbox.pack_start(hbtb, False, False, 0)
+        #hbtb = Gtk.HBox(spacing=WIDGET_SPACING)
+        #self.ctlvbox.pack_start(hbtb, False, False, 0)
+        hbtb = headerbar
 
         # title, pack_end, handler
-        tbitems = (('Настройка', False, lambda b: self.change_settings()),
-            ('Импорт библиотеки', False, lambda b: self.import_library()),
-            ('О программе', True, lambda b: self.dlgabout.run()),)
+        tbitems = (('Настройка', 'preferences-system', 'Настройка программы', False, lambda b: self.change_settings()),
+            ('Импорт библиотеки', 'document-open', 'Импорт индекса библиотеки', False, lambda b: self.import_library()),
+            ('О программе', 'help-about', 'Информация о программе', True, lambda b: self.dlgabout.run()),)
 
-        for label, toend, handler in tbitems:
-            btn = Gtk.Button(label)
+        for label, iconname, tooltip, toend, handler in tbitems:
+            btn = Gtk.Button.new_from_icon_name(iconname, Gtk.IconSize.BUTTON)# (label)
+            btn.set_tooltip_text(tooltip)
             btn.connect('clicked', handler)
 
-            (hbtb.pack_end if toend else hbtb.pack_start)(btn, False, False, 0)
+            (hbtb.pack_end if toend else hbtb.pack_start)(btn)#, False, False, 0)
 
         #
         # морда будет из двух вертикальных панелей
@@ -442,7 +457,8 @@ class MainWnd():
         blhbox = Gtk.HBox(spacing=WIDGET_SPACING)
         bpanel.pack_start(blhbox, False, False, 0)
 
-        create_labeled_entry(blhbox, 'Название:', self.booklisttitlepattern_changed, True)
+        entry = create_labeled_entry(blhbox, 'Название:', self.booklisttitlepattern_changed, True)
+        entry_setup_clear_icon(entry)
 
         #
         # панель с виджетами извлечения книг
@@ -534,6 +550,12 @@ class MainWnd():
         #
         #
         #
+
+        # поля для запроса в self.update_books(), заполняются из методов update_books_by_*
+        self.bookListUpdateColName = None
+        self.bookListUpdateColValue = None
+
+        # строка для фильтрации booklist, заполняется из поля ввода
         self.booklistTitlePattern = ''
 
         # создаём междумордие
@@ -658,7 +680,7 @@ class MainWnd():
         finally:
             self.end_task()
 
-    def update_books(self, idcolname, idcolvalue):
+    def update_books(self):
         """Обновление списка книг.
 
         idcolname   - имя столбца в таблице books для запроса к БД,
@@ -675,13 +697,13 @@ class MainWnd():
         stotalbooks = '?' if r is None else '%d' % r[0]
         nbooks = 0
 
-        if idcolvalue is not None:
+        if self.bookListUpdateColValue is not None:
             q = '''select bookid,books.title,serno,seriesnames.title,date,language
                 from books inner join seriesnames on seriesnames.serid=books.serid
                 where books.%s=?
-                order by seriesnames.title, serno, books.title, date;''' % idcolname
+                order by seriesnames.title, serno, books.title, date;''' % self.bookListUpdateColName
             #print(q)
-            cur = self.lib.cursor.execute(q, (idcolvalue,))
+            cur = self.lib.cursor.execute(q, (self.bookListUpdateColValue,))
             # для фильтрации по дате сделать втык в запрос подобного:
             #  and (date > "2014-01-01") and (date < "2016-12-31")
 

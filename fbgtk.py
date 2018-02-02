@@ -163,7 +163,7 @@ class TreeViewer():
 
 
 def msg_dialog(parent, title, msg, msgtype=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.OK):
-    dlg = Gtk.MessageDialog(parent, 0, msgtype, buttons, msg)
+    dlg = Gtk.MessageDialog(parent, 0, msgtype, buttons, msg)#, use_header_bar=True)
     dlg.set_title(title)
     r = dlg.run()
     dlg.destroy()
@@ -251,6 +251,20 @@ class LabeledGrid(Gtk.Grid):
         widget.props.hexpand = expand
         self.attach_next_to(widget, self.curcol, Gtk.PositionType.RIGHT, cols, rows)
         self.curcol = widget
+
+
+def __clear_entry_by_icon(entry, iconpos, event):
+    if iconpos == Gtk.EntryIconPosition.SECONDARY:
+        entry.set_text('')
+
+
+def entry_setup_clear_icon(entry):
+    """Включение правой иконки в Gtk.Entry и назначение обработчика её нажатия."""
+
+    entry.set_icon_from_icon_name(Gtk.EntryIconPosition.SECONDARY, 'gtk-clear')
+    entry.set_icon_activatable(Gtk.EntryIconPosition.SECONDARY, True)
+    entry.set_icon_tooltip_text(Gtk.EntryIconPosition.SECONDARY, 'Очистить')
+    entry.connect('icon-press', __clear_entry_by_icon)
 
 
 def get_resource_loader(env):
@@ -345,7 +359,8 @@ if __name__ == '__main__':
 
     import fbenv
 
-    #msg_dialog(None, 'Проверка', 'Проверка диалога')
+    msg_dialog(None, 'Проверка', 'Проверка диалога')
+    exit(0)
     env = fbenv.Environment()
     ldr = get_resource_loader(env)
     print('loader type:', type(ldr))
