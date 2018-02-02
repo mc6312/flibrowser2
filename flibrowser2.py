@@ -94,6 +94,9 @@ class AlphaListChooser():
         self.alphalist = TreeViewer((GObject.TYPE_STRING, GObject.TYPE_STRING),
             (TreeViewer.ColDef(self.COL_ALPHA_DISPLAY, '', False, True),))
 
+        # когда-нибудь потом переделать - вместо размеров иконки брать ширину шрифта, напр. 1em
+        self.alphalist.window.set_size_request(Gtk.IconSize.lookup(Gtk.IconSize.MENU)[1]*2, -1)
+
         self.alphalist.view.set_headers_visible(False)
         self.alphalist.view.set_enable_search(True)
         hbox.pack_start(self.alphalist.window, False, False, 0)
@@ -398,7 +401,9 @@ class MainWnd():
 
         avbox = Gtk.VBox(spacing=WIDGET_SPACING)
         avbox.set_border_width(WIDGET_SPACING)
-        avbox.set_size_request(384, -1) # минимальная ширина - пока приколочена гвоздями
+        # минимальная ширина - пока меряем в иконках
+        # (но надо бы относительно размеров шрифта)
+        avbox.set_size_request(Gtk.IconSize.lookup(Gtk.IconSize.MENU)[1]*24, -1)
         fr.add(avbox)
 
         # переключатель поиска по авторам или циклам

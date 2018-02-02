@@ -261,7 +261,7 @@ def __clear_entry_by_icon(entry, iconpos, event):
 def entry_setup_clear_icon(entry):
     """Включение правой иконки в Gtk.Entry и назначение обработчика её нажатия."""
 
-    entry.set_icon_from_icon_name(Gtk.EntryIconPosition.SECONDARY, 'gtk-clear')
+    entry.set_icon_from_icon_name(Gtk.EntryIconPosition.SECONDARY, 'edit-clear')
     entry.set_icon_activatable(Gtk.EntryIconPosition.SECONDARY, True)
     entry.set_icon_tooltip_text(Gtk.EntryIconPosition.SECONDARY, 'Очистить')
     entry.connect('icon-press', __clear_entry_by_icon)
@@ -347,7 +347,6 @@ class ZipFileResourceLoader(FileResourceLoader):
 
         with zipfile.ZipFile(self.env.appFilePath, allowZip64=True) as zfile:
             try:
-                print('trying to extract "%s"' % filename)
                 with zfile.open(filename, 'r') as f:
                     return GLib.Bytes.new(f.read())
             except Exception as ex:
