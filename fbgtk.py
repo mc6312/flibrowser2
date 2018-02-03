@@ -79,7 +79,7 @@ class TreeViewer():
         """Класс для параметров создания Gtk.TreeViewColumn"""
 
         def __init__(self, index, title='', editable=False,
-            expand=False, align=0.0, markup=False):
+            expand=False, align=0.0, markup=False, tooltip=None):
             """index    - номер столбца в List|TreeStore,
             title       - отображаемое в заголовке название,
             editable    - (булевское) запрет/разрешение редактирования ячейки,
@@ -87,7 +87,12 @@ class TreeViewer():
             align       - (0.0..1.0) выравнивание содержимого ячейки,
             markup      - (булевское) для столбцов типа GObject.TYPE_STRING:
                           True - использовать Pango Markup при отображении столбца,
-                          False - отображать как простой текст."""
+                          False - отображать как простой текст,
+            tooltip     - если не None, то целое - индекс столбца в *Store,
+                          который должен использоваться для отображения
+                          tooltips (всплывающих подсказок);
+                          если None - для подсказки будет использован
+                          столбец index."""
 
             self.index = index
             self.title = title
@@ -95,6 +100,7 @@ class TreeViewer():
             self.expand = expand
             self.align = align
             self.markup = markup
+            self.tooltip = tooltip if tooltip is not None else index
 
     def __init__(self, coltypes, coldefs, islist=True):
         """Создает объекты.
@@ -159,7 +165,7 @@ class TreeViewer():
 
             self.view.append_column(col)
 
-            self.colmap[col] = coldef.index
+            self.colmap[col] = coldef.tooltip
 
 
 def msg_dialog(parent, title, msg, msgtype=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.OK):

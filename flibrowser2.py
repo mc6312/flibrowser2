@@ -220,18 +220,14 @@ class AlphaListChooser():
 
     def nameentry_changed(self, entry, data=None):
         self.namePattern = entry.get_text().strip().lower()
-        self.update_names()
+        self.update_namelist()
 
 
 class MainWnd():
     """Основное междумордие"""
 
-    COL_AUTHALPHA_L1 = 0
-
-    COL_AUTH_ID, COL_AUTH_NAME = range(2)
-
     COL_BOOK_ID, COL_BOOK_TITLE, COL_BOOK_SERNO, COL_BOOK_SERIES, \
-    COL_BOOK_DATE, COL_BOOK_LANG = range(6)
+    COL_BOOK_DATE, COL_BOOK_TOOLTIP = range(6)
 
     def destroy(self, widget, data=None):
         Gtk.main_quit()
@@ -439,17 +435,19 @@ class MainWnd():
         self.bookframe.add(bpanel)
 
         # список книг
-
         self.booklist = TreeViewer(
             (GObject.TYPE_INT,      # bookid
                 GObject.TYPE_STRING,# title
                 GObject.TYPE_STRING,# series
                 GObject.TYPE_STRING,# serno
-                GObject.TYPE_STRING),# date
-            (TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True),
-                TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0),
+                GObject.TYPE_STRING,# date
+                GObject.TYPE_STRING),# COL_BOOK_TOOLTIP - подсказка для столбца с названием книги
+            (TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True, tooltip=self.COL_BOOK_TOOLTIP),
+                TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
                 TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True),
-                TreeViewer.ColDef(self.COL_BOOK_DATE, 'Дата', markup=True)))
+                TreeViewer.ColDef(self.COL_BOOK_DATE, 'Дата', markup=True, tooltip=self.COL_BOOK_SERIES)))
+
+        #print(self.booklist.colmap)
 
         self.booklist.view.connect('motion-notify-event', self.booklist_mouse_moved)
 
@@ -634,6 +632,8 @@ class MainWnd():
         r = self.booklist.view.get_path_at_pos(event.x, event.y)
         if r is not None:
             mcolid = self.booklist.colmap[r[1]]
+            #print('tooltip column', mcolid)
+            #print('columns', self.booklist.store.get_n_columns())
 
             if self.booklist.view.get_tooltip_column() != mcolid:
                 self.booklist.view.set_tooltip_column(mcolid)
@@ -702,9 +702,14 @@ class MainWnd():
         stotalbooks = '?' if r is None else '%d' % r[0]
         nbooks = 0
 
+        UB_COL_BOOKID, UB_COL_TITLE, UB_COL_SERNO, UB_COL_SERNAME, UB_COL_DATE,\
+        UB_COL_AUTHORNAME = range(6)
+
         if self.bookListUpdateColValue is not None:
-            q = '''select bookid,books.title,serno,seriesnames.title,date,language
-                from books inner join seriesnames on seriesnames.serid=books.serid
+            q = '''select bookid,books.title,serno,seriesnames.title,date,authornames.name
+                from books
+                inner join seriesnames on seriesnames.serid=books.serid
+                inner join authornames on authornames.authorid=books.authorid
                 where books.%s=?
                 order by seriesnames.title, serno, books.title, date;''' % self.bookListUpdateColName
             #print(q)
@@ -722,11 +727,11 @@ class MainWnd():
                 nbooks += 1
 
                 # поля, которые могут потребовать доп. телодвижений
-                title = r[1]
-                seriestitle = r[3]
+                title = r[UB_COL_TITLE]
+                seriestitle = r[UB_COL_SERNAME]
 
                 # подразумеваятся, что в соотв. поле БД точно есть хоть какая-то дата
-                date = datetime.datetime.strptime(r[4], DB_DATE_FORMAT)
+                date = datetime.datetime.strptime(r[UB_COL_DATE], DB_DATE_FORMAT)
                 # тут, возможно, будет код для показа соответствия "дата - цвет 'свежести' книги"
                 # и/или фильтрация по дате
                 datestr = '<span color="%s">⬛</span> %s' % (get_book_age_color(datenow, date), date.strftime(DISPLAY_DATE_FORMAT))
@@ -739,13 +744,14 @@ class MainWnd():
                         and seriestitle.lower().find(self.booklistTitlePattern) < 0:
                         continue
 
-                serno = r[2]
+                serno = r[UB_COL_SERNO]
 
-                self.booklist.store.append((r[0], # bookid
+                self.booklist.store.append((r[UB_COL_BOOKID], # bookid
                     title, # books.title
                     str(serno) if serno > 0 else '', # serno
                     seriestitle, # seriesnames.title
                     datestr, # date
+                    '%s.\n<b>"%s"</b>' % (GLib.markup_escape_text(r[UB_COL_AUTHORNAME], -1), GLib.markup_escape_text(title, -1))
                     ))
 
         self.booklist.view.set_model(self.booklist.store)
