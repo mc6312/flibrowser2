@@ -31,6 +31,7 @@ from fbextract import *
 import fbfntemplate
 from fbabout import AboutDialog
 from fbsetup import SetupDialog
+from fbchoosers import *
 
 from collections import namedtuple
 
@@ -38,189 +39,6 @@ import os.path
 import datetime
 
 from time import time, sleep
-
-
-class AlphaListChooser():
-    """Обёртка над двумя таблицами - алфавитным списком, содержащим
-    столбец alpha (см. далее colAlpha), и списком имён, содержащим
-    столбцы id, alpha, name (название столбца alpha должно совпадать
-    в обеих таблицах) и двумя Gtk.TreeView,
-    в первом из которых - алфавитный список,
-    во втором - список имён (например, первые буквы имён авторов
-    и имена авторов)."""
-
-    tableparams = namedtuple('tableparams', 'alphatablename nametablename colnameid colalpha colnametext emptyalphatext onnameselected')
-    """Параметры таблицы, с которой работает AlphaListChooser:
-
-        alphatablename      - имя таблицы в БД для списка имён
-        nametablename       - имя таблицы в БД для алфавитного списка
-        colnameid           - имя столбца с primary key в таблице имён
-        colalpha            - имя столбца с 1й буквой (alpha) в таблицах alphatable и nametable
-        colnametext         - имя столбца с отображаемым текстом в nametable
-        emptyalphatext      - значение, отображаемое в alphalist, если alpha==''
-        onnameselected      - функция или метод, обрабатывающие событие
-                              "выбран элемент в списке namelist"
-                              функция должна принимать один параметр -
-                              значение selectedNameId."""
-
-    # столбцы алфавитного списка
-    COL_ALPHA_VALUE, COL_ALPHA_DISPLAY = range(2)
-
-    # столбцы списка имён
-    COL_NAME_ID, COL_NAME_TEXT = range(2)
-
-    def __init__(self, lib):
-        """Инициализация объекта и создание виджетов.
-
-        lib - экземпляр fblib.LibraryDB."""
-
-        self.lib = lib
-
-        self.tableParams = None # сюда будет присвоен экземпляр AlphaListChooser.tableparams
-
-        # буква, выбранная в self.alphalist
-        self.selectedAlpha = None
-
-        # строка для фильтрации self.namelist
-        self.namePattern = ''
-
-        #
-        self.box = Gtk.VBox(spacing=WIDGET_SPACING)
-
-        hbox = Gtk.HBox(spacing=WIDGET_SPACING)
-        self.box.pack_start(hbox, True, True, 0)
-
-        # алфавитный список
-        self.alphalist = TreeViewer((GObject.TYPE_STRING, GObject.TYPE_STRING),
-            (TreeViewer.ColDef(self.COL_ALPHA_DISPLAY, '', False, True),))
-
-        # когда-нибудь потом переделать - вместо размеров иконки брать ширину шрифта, напр. 1em
-        self.alphalist.window.set_size_request(Gtk.IconSize.lookup(Gtk.IconSize.MENU)[1]*2, -1)
-
-        self.alphalist.view.set_headers_visible(False)
-        self.alphalist.view.set_enable_search(True)
-        hbox.pack_start(self.alphalist.window, False, False, 0)
-
-        self.alphalist.selection.set_mode(Gtk.SelectionMode.SINGLE)
-        self.alphalist.selection.connect('changed', self.alphalist_selected)
-
-        # список имён
-        self.namelist = TreeViewer(
-            # id, name
-            (GObject.TYPE_INT, GObject.TYPE_STRING),
-            (TreeViewer.ColDef(self.COL_NAME_TEXT, '', False, True),))
-
-        self.namelist.view.set_headers_visible(False)
-        self.namelist.view.set_enable_search(True)
-        self.namelist.view.set_tooltip_column(self.COL_NAME_TEXT)
-
-        self.namelist.selection.connect('changed', self.namelist_selected)
-
-        hbox.pack_end(self.namelist.window, True, True, 0)
-
-        hpanel = Gtk.HBox(spacing=WIDGET_SPACING)
-        self.box.pack_end(hpanel, False, False, 0)
-
-        entry = create_labeled_entry(hpanel, 'Имя:', self.nameentry_changed, True)
-        entry_setup_clear_icon(entry)
-
-    def connect_db_table(self, params):
-        """Настройка на таблицу БД.
-
-        params - экземпляр AlphaListChooser.tableparams."""
-
-        self.tableParams = params
-
-        self.update_alphalist()
-
-    def update_alphalist(self):
-        """Обновление алфавитного списка"""
-
-        if self.tableParams is None:
-            return
-
-        # первые буквы имён авторов
-        self.alphalist.view.set_model(None)
-        self.alphalist.store.clear()
-
-        q = 'select %s from %s order by %s;' %\
-            (self.tableParams.colalpha, self.tableParams.alphatablename,
-            self.tableParams.colalpha)
-        #print(q)
-        cur = self.lib.cursor.execute(q)
-
-        while True:
-            r = cur.fetchone()
-            if r is None:
-                break
-
-            s = r[0]
-            self.alphalist.store.append((s, s if s else self.tableParams.emptyalphatext))
-
-        self.alphalist.view.set_model(self.alphalist.store)
-        self.alphalist.view.set_search_column(self.COL_ALPHA_DISPLAY)
-
-    def update_namelist(self):
-        """Обновление списка имён"""
-
-        if self.tableParams is None:
-            return
-
-        self.namelist.view.set_model(None)
-        self.namelist.store.clear()
-
-        if self.selectedAlpha is not None:
-            cur = self.lib.cursor.execute('select %s,%s from %s where %s="%s" order by %s;' %\
-                (self.tableParams.colnameid, self.tableParams.colnametext,
-                self.tableParams.nametablename,
-                self.tableParams.colalpha, self.selectedAlpha,
-                self.tableParams.colnametext))
-
-            while True:
-                r = cur.fetchone()
-                if r is None:
-                    break
-
-                # фильтрация по начальным буквам имени автора.
-                # вручную, ибо лень прикручивать collation к sqlite3
-
-                if self.namePattern and not r[1].lower().startswith(self.namePattern):
-                    continue
-
-                self.namelist.store.append((r[0], r[1]))
-
-        self.namelist.view.set_model(self.namelist.store)
-        self.namelist.view.set_search_column(self.COL_NAME_TEXT)
-
-    def alphalist_selected(self, sel, data=None):
-        """Обработка события выбора элемента(ов) в списке первых букв имён"""
-
-        rows = self.alphalist.selection.get_selected_rows()[1]
-        if rows:
-            self.selectedAlpha = self.alphalist.store.get_value(self.alphalist.store.get_iter(rows[0]), self.COL_ALPHA_VALUE)
-        else:
-            self.selectedAlpha = None
-
-        #print('"%s"' % self.selectedAlpha)
-
-        self.update_namelist()
-
-    def namelist_selected(self, sel, data=None):
-        """Обработка события выбора элемента(ов) в списке имён"""
-
-        rows = self.namelist.selection.get_selected_rows()[1]
-
-        if rows:
-            self.selectedNameId = self.namelist.store.get_value(self.namelist.store.get_iter(rows[0]), self.COL_NAME_ID)
-        else:
-            self.selectedNameId = None
-
-        if callable(self.tableParams.onnameselected):
-            self.tableParams.onnameselected(self.selectedNameId)
-
-    def nameentry_changed(self, entry, data=None):
-        self.namePattern = entry.get_text().strip().lower()
-        self.update_namelist()
 
 
 class MainWnd():
@@ -279,18 +97,22 @@ class MainWnd():
         while Gtk.events_pending():
             Gtk.main_iteration()
 
-    def begin_task(self, msg):
-        self.ctlvbox.set_sensitive(False)
+    def set_widgets_sensitive(self, wgtlst, v):
+        for widget in wgtlst:
+            widget.set_sensitive(v)
+
+    def task_begin(self, msg):
+        self.set_widgets_sensitive(self.tasksensitivewidgets, False)
         self.task_msg(msg)
 
     def task_msg(self, msg):
         self.labmsg.set_text(msg)
         self.task_events()
 
-    def end_task(self, msg=''):
+    def task_end(self, msg=''):
         self.labmsg.set_text(msg)
         self.progressbar.set_fraction(0.0)
-        self.ctlvbox.set_sensitive(True)
+        self.set_widgets_sensitive(self.tasksensitivewidgets, True)
 
     def task_progress(self, fraction):
         self.progressbar.set_fraction(fraction)
@@ -319,7 +141,7 @@ class MainWnd():
         headerbar.set_show_close_button(True)
         headerbar.set_decoration_layout('menu:minimize,maximize,close')
         headerbar.set_title(TITLE)
-        headerbar.set_subtitle(VERSION)
+        headerbar.set_subtitle('v%s' % VERSION)
 
         self.window.set_titlebar(headerbar)
 
@@ -340,9 +162,14 @@ class MainWnd():
         rootvbox = Gtk.VBox(spacing=WIDGET_SPACING)
         self.window.add(rootvbox)
 
+        self.tasksensitivewidgets = []
+        # список виджетов, которые должны блокироваться между вызовами task_begin/task_end
+
         # всё, кроме прогрессбара, кладём сюда, чтоб блокировать разом
         self.ctlvbox = Gtk.VBox(spacing=WIDGET_SPACING)
         rootvbox.pack_start(self.ctlvbox, True, True, 0)
+
+        self.tasksensitivewidgets.append(self.ctlvbox)
 
         #
         # меню или тулбар (потом окончательно решу)
@@ -356,7 +183,7 @@ class MainWnd():
 
         # title, pack_end, handler
         tbitems = (('Настройка', 'preferences-system', 'Настройка программы', False, lambda b: self.change_settings()),
-            ('Импорт библиотеки', 'document-open', 'Импорт индекса библиотеки', False, lambda b: self.import_library()),
+            ('Импорт библиотеки', 'system-run', 'Импорт индекса библиотеки', False, lambda b: self.import_library()),
             ('О программе', 'help-about', 'Информация о программе', True, lambda b: self.dlgabout.run()),)
 
         for label, iconname, tooltip, toend, handler in tbitems:
@@ -364,6 +191,7 @@ class MainWnd():
             btn.set_tooltip_text(tooltip)
             btn.connect('clicked', handler)
 
+            self.tasksensitivewidgets.append(btn)
             (hbtb.pack_end if toend else hbtb.pack_start)(btn)#, False, False, 0)
 
         #
@@ -371,6 +199,7 @@ class MainWnd():
         #
 
         self.roothpaned = Gtk.HPaned()
+        self.roothpaned.set_wide_handle(True)
         self.roothpaned.connect('notify::position', self.roothpaned_moved)
         self.ctlvbox.pack_start(self.roothpaned, True, True, 0)
 
@@ -380,47 +209,27 @@ class MainWnd():
         # и на момент вызова поле MainWnd.booklist уже должно существовать
 
         #
-        # в левой панели - алфавитный список авторов
-        # (из двух отдельных виджетов Gtk.TreeView)
+        # в левой панели - алфавитные списки авторов и циклов
         #
-        self.alphaChooserParamsByAuthorId = AlphaListChooser.tableparams(
-            'authornamealpha', 'authornames',
-            'authorid', 'alpha', 'name', '<>',
-            self.update_books_by_authorid)
-        self.alphaChooserParamsBySerId = AlphaListChooser.tableparams(
-            'seriesnamealpha', 'seriesnames',
-            'serid', 'alpha', 'title', '<>',
-            self.update_books_by_serid)
+        self.chooserpages = Gtk.Notebook()
+        self.chooserpages.set_size_request(WIDGET_WIDTH_UNIT*24, -1)
 
-        fr = Gtk.Frame.new()
-        self.roothpaned.pack1(fr, True, False)
+        self.roothpaned.pack1(self.chooserpages, True, False)
 
-        avbox = Gtk.VBox(spacing=WIDGET_SPACING)
-        avbox.set_border_width(WIDGET_SPACING)
-        # минимальная ширина - пока меряем в иконках
-        # (но надо бы относительно размеров шрифта)
-        avbox.set_size_request(Gtk.IconSize.lookup(Gtk.IconSize.MENU)[1]*24, -1)
-        fr.add(avbox)
+        self.choosers = []
 
-        # переключатель поиска по авторам или циклам
+        for chooserclass, handler in ((AuthorAlphaListChooser, self.update_books_by_authorid),
+            (SeriesAlphaListChooser, self.update_books_by_serid)):
 
-        ahbox = Gtk.HBox(spacing=WIDGET_SPACING)
-        avbox.pack_start(ahbox, False, False, 0)
+            chooser = chooserclass(self.lib, handler)
+            self.choosers.append(chooser)
 
-        self.rbauthors = Gtk.RadioButton.new_with_label(None, 'Авторы')
-        ahbox.pack_start(self.rbauthors, False, False, 0)
+            box = Gtk.VBox() # костыль для пустой рамки вокруг дочернего контейнера
+            box.set_border_width(WIDGET_SPACING)
+            box.pack_start(chooser.box, True, True, 0)
+            self.chooserpages.append_page(box, Gtk.Label(chooserclass.LABEL))
 
-        self.rbseries = Gtk.RadioButton.new_with_label_from_widget(self.rbauthors, 'Циклы/сериалы')
-        ahbox.pack_start(self.rbseries, False, False, 0)
-
-        # алфавитный список авторов или циклов
-        self.alphachooser = AlphaListChooser(self.lib)
-        self.alphachooser.connect_db_table(self.alphaChooserParamsByAuthorId)
-        avbox.pack_end(self.alphachooser.box, True, True, 0)
-
-        self.rbauthors.connect('toggled', self.switch_alphachooser, self.alphaChooserParamsByAuthorId)
-        self.rbseries.connect('toggled', self.switch_alphachooser, self.alphaChooserParamsBySerId)
-        self.rbauthors.set_active(True)
+        self.chooserpages.connect('switch-page', self.chooser_page_switched)
 
         #
         # в правой панели - список книг соотв. автора и управление распаковкой
@@ -430,7 +239,7 @@ class MainWnd():
         self.roothpaned.pack2(self.bookframe, True, False)
 
         bpanel = Gtk.VBox(spacing=WIDGET_SPACING)
-        bpanel.set_size_request(480, -1) #!!!
+        bpanel.set_size_request(WIDGET_WIDTH_UNIT*20, -1) #!!!
         bpanel.set_border_width(WIDGET_SPACING)
         self.bookframe.add(bpanel)
 
@@ -566,7 +375,13 @@ class MainWnd():
 
         self.check_1st_run()
 
-        self.alphachooser.update_alphalist()
+        self.update_choosers()
+
+    def update_choosers(self):
+        """Обновление потрохов экземпляров FilterChooser после обновления БД"""
+
+        for chooser in self.choosers:
+            chooser.update()
 
     def check_1st_run(self):
         """Проверка на первый запуск и, при необходимости, первоначальная настройка."""
@@ -582,7 +397,7 @@ class MainWnd():
             self.lib.init_tables()
 
     def import_library(self):
-        self.begin_task('Импорт библиотеки')
+        self.task_begin('Импорт библиотеки')
         try:
             print('Инициализация БД (%s)...' % self.env.libraryFilePath)
             self.task_msg('Инициализация БД')
@@ -591,17 +406,19 @@ class MainWnd():
             inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
             print('Импорт индекса библиотеки "%s"...' % inpxFileName)
             self.task_msg('Импорт индекса библиотеки')
+
             importer = INPXImporter(self.lib, self.cfg)
             importer.import_inpx_file(inpxFileName, self.task_progress)
 
-            self.alphachooser.update_alphalist()
+            print('Импортировано книг: %d' % self.get_total_book_count())
+
+            self.update_choosers()
 
         finally:
-            self.end_task()
+            self.task_end()
 
-    def switch_alphachooser(self, rbtn, tparams):
-        if tparams is not None:
-            self.alphachooser.connect_db_table(tparams)
+    def chooser_page_switched(self, nbook, page, pagenum):
+        self.choosers[pagenum].do_on_choosed()
 
     def roothpaned_moved(self, paned, data=None):
         pp = paned.get_position()
@@ -660,7 +477,7 @@ class MainWnd():
 
     def extract_books(self):
         """Извлечение выбранных в списке книг"""
-        self.begin_task('Извлечение книг...')
+        self.task_begin('Извлечение книг...')
         try:
             em = ''
             ei = Gtk.MessageType.WARNING
@@ -683,7 +500,17 @@ class MainWnd():
                 msg_dialog(self.window, 'Извлечение книг', em, ei)
 
         finally:
-            self.end_task()
+            self.task_end()
+
+    def get_total_book_count(self):
+        """Возвращает общее количество книг в БД"""
+
+        cur = self.lib.cursor.execute('select count(*) from books;')
+        r = cur.fetchone()
+        if r is None:
+            return 0
+        else:
+            return r[0]
 
     def update_books(self):
         """Обновление списка книг.
@@ -697,15 +524,15 @@ class MainWnd():
         self.booklist.view.set_model(None)
         self.booklist.store.clear()
 
-        cur = self.lib.cursor.execute('select count(*) from books;')
-        r = cur.fetchone()
-        stotalbooks = '?' if r is None else '%d' % r[0]
+        ntotalbooks = self.get_total_book_count()
+        stotalbooks = '%d' % ntotalbooks
         nbooks = 0
 
         UB_COL_BOOKID, UB_COL_TITLE, UB_COL_SERNO, UB_COL_SERNAME, UB_COL_DATE,\
         UB_COL_AUTHORNAME = range(6)
 
         if self.bookListUpdateColValue is not None:
+            # получаем список книг
             q = '''select bookid,books.title,serno,seriesnames.title,date,authornames.name
                 from books
                 inner join seriesnames on seriesnames.serid=books.serid
@@ -714,9 +541,10 @@ class MainWnd():
                 order by seriesnames.title, serno, books.title, date;''' % self.bookListUpdateColName
             #print(q)
             cur = self.lib.cursor.execute(q, (self.bookListUpdateColValue,))
-            # для фильтрации по дате сделать втык в запрос подобного:
-            #  and (date > "2014-01-01") and (date < "2016-12-31")
 
+            # для фильтрации по дате можно сделать втык в запрос подобного:
+            #  and (date > "2014-01-01") and (date < "2016-12-31")
+            # или вручную фильтровать ниже
             datenow = datetime.datetime.now()
 
             while True:
@@ -726,6 +554,8 @@ class MainWnd():
 
                 nbooks += 1
 
+                bookid = r[UB_COL_BOOKID]
+
                 # поля, которые могут потребовать доп. телодвижений
                 title = r[UB_COL_TITLE]
                 seriestitle = r[UB_COL_SERNAME]
@@ -734,7 +564,7 @@ class MainWnd():
                 date = datetime.datetime.strptime(r[UB_COL_DATE], DB_DATE_FORMAT)
                 # тут, возможно, будет код для показа соответствия "дата - цвет 'свежести' книги"
                 # и/или фильтрация по дате
-                datestr = '<span color="%s">⬛</span> %s' % (get_book_age_color(datenow, date), date.strftime(DISPLAY_DATE_FORMAT))
+                datestr = '<span color="%s">\u25CF</span> %s' % (get_book_age_color(datenow, date), date.strftime(DISPLAY_DATE_FORMAT))
 
                 # дополнительная фильтрация вручную, т.к. sqlite3 "из коробки"
                 # не умеет в collation, и вообще что-то проще сделать не через запросы SQL
@@ -746,12 +576,13 @@ class MainWnd():
 
                 serno = r[UB_COL_SERNO]
 
-                self.booklist.store.append((r[UB_COL_BOOKID], # bookid
+                self.booklist.store.append((bookid,
                     title, # books.title
                     str(serno) if serno > 0 else '', # serno
                     seriestitle, # seriesnames.title
                     datestr, # date
-                    '%s.\n<b>"%s"</b>' % (GLib.markup_escape_text(r[UB_COL_AUTHORNAME], -1), GLib.markup_escape_text(title, -1))
+                    '%s.\n<b>"%s".</b>' % (GLib.markup_escape_text(r[UB_COL_AUTHORNAME], -1),
+                        GLib.markup_escape_text(title, -1))
                     ))
 
         self.booklist.view.set_model(self.booklist.store)

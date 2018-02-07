@@ -230,8 +230,8 @@ class INPXFile():
                                 # вот ниибет, что квыво
                                 raise Exception(u'Ошибка в записи #%d файла "%s" - %s\n* запись: %s' % (recix + 1, fname, str(ex), u';'.join(srcrec)))
 
-                            if show_progress is not None:
-                                show_progress(float(ixindex) / numindexes)
+                    if show_progress is not None:
+                        show_progress(float(ixindex) / numindexes)
 
         except Exception as ex:
             raise Exception(u'Ошибка обработки файла "%s",\n%s' % (fpath, str(ex)))
@@ -248,31 +248,10 @@ class INPXFile():
 if __name__ == '__main__':
     print('[test]')
 
-    class TestINPXFile(INPXFile):
-        PROGRESS_DELAY = 1000
+    def show_progress(fraction):
+        print('%d%%\x0d' % int(fraction * 100), end='')
 
-        def __init__(self):
-            super().__init__()
-            self.ids = dict()
-            self.dups = []
-            self.progressdelay = self.PROGRESS_DELAY
-
-        def show_progress(self, fraction):
-            if self.progressdelay > 0:
-                self.progressdelay -= 1
-            else:
-                self.progressdelay = self.PROGRESS_DELAY
-                print('%d%%\x0d' % int(fraction * 100), end='')
-
-        def flush_record(self, record):
-            recd = '(%s) %s - %s' % ('D' if record[self.REC_DEL] else 'A', record[self.REC_AUTHOR], record[self.REC_TITLE])
-            libid = record[self.REC_LIBID]
-            if libid not in self.ids:
-                self.ids[libid] = recd
-            else:
-                self.dups.append('* duplicated record "%s" ("%s" with same id %d' % (recd, self.ids[libid], libid))
-
-    inpx = TestINPXFile()
-    inpx.import_inpx_file('flibusta_fb2_local.inpx', inpx.show_progress)
+    inpx = INPXFile()
+    inpx.import_inpx_file('flibusta_fb2_local.inpx', show_progress)
     #for d in inpx.dups:
     #    print(d)

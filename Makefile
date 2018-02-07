@@ -7,7 +7,7 @@ arcname = $(basename)$(arcx)
 srcarcname = $(basename)-src$(arcx)
 backupdir = ~/shareddocs/pgm/python/
 zipname = $(basename).zip
-srcs = __main__.py flibrowser2.py fb*.py flibrowser.svg
+srcs = __main__.py $(basename).py fb*.py $(basename).svg COPYING
 
 app:
 	zip -9 $(zipname) $(srcs)
@@ -19,7 +19,10 @@ archive:
 	$(pack) $(srcarcname) *.py *.svg Makefile *.sh *.geany $(docs)
 distrib:
 	make app
-	$(pack) $(arcname) $(basename) $(docs)
+	make icon
+	$(pack) $(arcname) $(basename) $(docs) $(basename).ico
+icon:
+	convert $(basename).svg $(basename).ico
 backup:
 	make archive
 	mv $(srcarcname) $(backupdir)

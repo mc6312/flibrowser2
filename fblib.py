@@ -334,6 +334,36 @@ def __test_inpx_import(lib, cfg, inpxFileName): #, genreNamesFile):
 
         print(r)"""
 
+def __test_book_list(lib):
+    q = '''select books.bookid,books.title,serno,seriesnames.title,date,authornames.name
+            from books
+            inner join seriesnames on seriesnames.serid=books.serid
+            inner join authornames on authornames.authorid=books.authorid
+            where books.bookid in (select bookid from genres limit 500)
+            order by seriesnames.title, serno, books.title, date limit 20;'''
+    cur = lib.cursor.execute(q)
+    if cur:
+        while True:
+            r = cur.fetchone()
+            if r is None:
+                break
+
+            print(r)
+
+
+def __test_genre_list(lib):
+    q = '''select genrenames.name from genrenames
+        inner join genretags on genretags.tag=genrenames.tag;'''
+
+    cur = lib.cursor.execute(q)
+    if cur:
+        while True:
+            r = cur.fetchone()
+            if r is None:
+                break
+
+            print(r)
+
 
 if __name__ == '__main__':
     print('[test]')
@@ -349,7 +379,9 @@ if __name__ == '__main__':
     lib = LibraryDB(env.libraryFilePath)
     lib.connect()
     try:
-        __test_inpx_import(lib, cfg, inpxFileName)#, genreNamesFile)
+        #__test_inpx_import(lib, cfg, inpxFileName)#, genreNamesFile)
+        __test_book_list(lib)
+        #__test_genre_list(lib)
         #pass
     finally:
         lib.disconnect()

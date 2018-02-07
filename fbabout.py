@@ -29,11 +29,11 @@ from gi.repository.GdkPixbuf import Pixbuf
 from fbgtk import *
 
 
-LOGO_SIZE = 192
+LOGO_SIZE = WIDGET_WIDTH_UNIT*8
 
 
 class AboutDialog():
-    ICONNAME = 'flibrowser.svg'
+    ICONNAME = 'flibrowser2.svg'
 
     def __init__(self, parentwnd, env):
         """Создание и первоначальная настройка.
@@ -62,21 +62,15 @@ class AboutDialog():
 
         self.dlgabout.set_icon(self.windowicon)
 
-        #self.dlgabout.set_size_request(-1, 600)
+        self.dlgabout.set_size_request(WIDGET_WIDTH_UNIT*24, WIDGET_WIDTH_UNIT*32)
         self.dlgabout.set_copyright(COPYRIGHT)
-        self.dlgabout.set_version(VERSION)
+        self.dlgabout.set_version('версия %s' % VERSION)
         self.dlgabout.set_program_name(TITLE)
         self.dlgabout.set_logo(logotype)
 
-        pathLicense = os.path.join(env.appDir, 'COPYING') # патамушто
-
-        if os.path.exists(pathLicense):
-            try:
-                with open(pathLicense, 'r') as f:
-                    slicense = f.read().strip()
-            except OSError:
-                slicense = None
-        else:
+        try:
+            slicense = str(ldr.load('COPYING'), 'utf-8')
+        except:
             slicense = None
 
         #self.dlgabout.set_license_type(Gtk.License.GPL_3_0_ONLY)

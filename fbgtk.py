@@ -31,8 +31,11 @@ import zipfile
 
 
 # отступы между виджетами, дабы не вырвало от пионерского вида гуя
-# когда-нибудь надо будет их считать от размеров шрифта, а пока так сойдет
-WIDGET_SPACING = 4
+
+WIDGET_WIDTH_UNIT = Gtk.IconSize.lookup(Gtk.IconSize.MENU)[1]
+WIDGET_SPACING = WIDGET_WIDTH_UNIT / 4
+if WIDGET_SPACING < 4:
+    WIDGET_SPACING = 4
 
 # Вынимание! GTK желает юникода!
 UI_ENCODING = 'utf-8'
@@ -125,6 +128,8 @@ class TreeViewer():
 
         self.view = Gtk.TreeView(self.store)
         self.view.set_border_width(WIDGET_SPACING)
+
+        self.view.set_rules_hint(True)
 
         self.selection = self.view.get_selection()
 
@@ -294,9 +299,9 @@ class FileResourceLoader():
 
         self.env = env
 
-    def load_bytes(self, filename):
+    def load(self, filename):
         """Загружает файл filename в память и возвращает в виде
-        экземпляра GLib.Bytes.
+        bytestring.
 
         filename - относительный путь к файлу."""
 
@@ -308,10 +313,18 @@ class FileResourceLoader():
         try:
             self.error = None
             with open(filename, 'rb') as f:
-                return GLib.Bytes.new(f.read())
+                return f.read()
         except Exception as ex:
             # для более внятных сообщений
             self.error = 'Не удалось загрузить файл "%s" - %s' % (filename, str(ex))
+
+    def load_bytes(self, filename):
+        """Загружает файл filename в память и возвращает в виде
+        экземпляра GLib.Bytes.
+
+        filename - относительный путь к файлу."""
+
+        return GLib.Bytes.new(self.load(filename))
 
     def load_memory_stream(self, filename):
         """Загружает файл в память и возвращает в виде экземпляра Gio.MemoryInputStream."""
@@ -342,9 +355,9 @@ class ZipFileResourceLoader(FileResourceLoader):
     Архив - сам файл flibrowser2 в случае, когда он
     представляет собой python zip application."""
 
-    def load_bytes(self, filename):
-        """Аналогично FileResourceLoader.load_bytes(), загружает файл
-        filename в память и возвращает в виде экземпляра GLib.Bytes.
+    def load(self, filename):
+        """Аналогично FileResourceLoader.load(), загружает файл
+        filename в память и возвращает в виде экземпляра bytestring.
 
         filename - путь к файлу внутри архива."""
 
@@ -354,7 +367,7 @@ class ZipFileResourceLoader(FileResourceLoader):
         with zipfile.ZipFile(self.env.appFilePath, allowZip64=True) as zfile:
             try:
                 with zfile.open(filename, 'r') as f:
-                    return GLib.Bytes.new(f.read())
+                    return f.read()
             except Exception as ex:
                 raise Exception('Не удалось загрузить файл "%s" - %s' % (filename, str(ex)))
 

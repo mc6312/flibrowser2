@@ -22,7 +22,7 @@
 """Базовые функции и классы для работы с БД sqlite3"""
 
 from fbinpx import INPXFile
-from fbsqlgenlist import import_genre_list_mysqldump
+#from fbsqlgenlist import import_genre_list_mysqldump
 import sqlite3
 import datetime
 
