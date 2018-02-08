@@ -27,6 +27,8 @@ from fbgtk import *
 from gi.repository import Gtk, Gdk, GObject, Pango, GLib
 from gi.repository.GdkPixbuf import Pixbuf
 
+from random import randrange
+
 
 class FilterChooser():
     """Базовый класс для обёртки над виджетами фильтрации"""
@@ -63,6 +65,12 @@ class FilterChooser():
         """Вызов self.onchoosed "снаружи"."""
 
         self.onchoosed(self.selectedId)
+
+    def random_choice(self):
+        """Случайный выбор элемента списка.
+        Метод ДОЛЖЕН быть перекрыт классом-потомком."""
+
+        raise NotImplementedError('%s.random_choice() must be implemented' % self.__class__.__name__)
 
     def update(self):
         """Обновление содержимого виджетов из БД (self.lib).
@@ -229,6 +237,15 @@ class AlphaListChooser(FilterChooser):
     def nameentry_changed(self, entry, data=None):
         self.namePattern = entry.get_text().strip().lower()
         self.update_namelist()
+
+    def random_choice(self):
+        """Выбор случайных элементов в алфавитном и именном списках.
+        Возвращает True в случае успеха и False, если не из чего выбирать."""
+
+        if self.alphalist.random_choice():
+            return self.namelist.random_choice()
+        else:
+            return False
 
 
 class AuthorAlphaListChooser(AlphaListChooser):

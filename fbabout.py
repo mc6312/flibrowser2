@@ -35,30 +35,22 @@ LOGO_SIZE = WIDGET_WIDTH_UNIT*8
 class AboutDialog():
     ICONNAME = 'flibrowser2.svg'
 
-    def __init__(self, parentwnd, env):
+    def __init__(self, parentwnd, resldr):
         """Создание и первоначальная настройка.
 
         parentwnd   - экземпляр Gtk.Window или None,
-        env         - экземпляр fbenv.Environment."""
+        resldr      - экземпляр fbgtk.ResourceLoader."""
 
         self.dlgabout = Gtk.AboutDialog(parent=parentwnd)
 
-        ldr = get_resource_loader(env)
         try:
-            logo = ldr.load_bytes(self.ICONNAME)
+            logo = resldr.load_bytes(self.ICONNAME)
 
-            logotype = ldr.pixbuf_from_bytes(logo, LOGO_SIZE, LOGO_SIZE)
-
-            rok, rw, rh = Gtk.IconSize.lookup(Gtk.IconSize.DIALOG)
-            # проверять rok == True не буду - если ф-я на стандартное значение
-            # не вернет соотв. размер, то поломат либо gtk, либо gobject, и пошло всё в жопу
-
-            self.windowicon = ldr.pixbuf_from_bytes(logo, rw, rh)
+            self.windowicon = resldr.pixbuf_from_bytes(logo, LOGO_SIZE, LOGO_SIZE)
 
         except Exception as ex:
             print('Не удалось загрузить файл изображения "%s" - %s' % (self.ICONNAME, str(ex)))
-            logotype = self.dlgabout.render_icon_pixbuf('gtk-find', Gtk.IconSize.DIALOG)
-            self.windowicon = logotype
+            self.windowicon = Gtk.IconTheme.get_default().load_icon('gtk-find', LOGO_SIZE, Gtk.IconLookupFlags.FORCE_SIZE)
 
         self.dlgabout.set_icon(self.windowicon)
 
@@ -66,10 +58,10 @@ class AboutDialog():
         self.dlgabout.set_copyright(COPYRIGHT)
         self.dlgabout.set_version('версия %s' % VERSION)
         self.dlgabout.set_program_name(TITLE)
-        self.dlgabout.set_logo(logotype)
+        self.dlgabout.set_logo(self.windowicon)
 
         try:
-            slicense = str(ldr.load('COPYING'), 'utf-8')
+            slicense = str(resldr.load('COPYING'), 'utf-8')
         except:
             slicense = None
 
@@ -92,9 +84,9 @@ class AboutDialog():
 def main():
     print('[%s test]' % __file__)
 
-    import fbenv
-
-    AboutDialog(None, fbenv.Environment()).run()
+    from fbenv import Environment
+    ldr = get_resource_loader(Environment())
+    AboutDialog(None, ldr).run()
 
 if __name__ == '__main__':
     exit(main())

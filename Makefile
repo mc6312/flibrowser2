@@ -7,7 +7,7 @@ arcname = $(basename)$(arcx)
 srcarcname = $(basename)-src$(arcx)
 backupdir = ~/shareddocs/pgm/python/
 zipname = $(basename).zip
-srcs = __main__.py $(basename).py fb*.py $(basename).svg COPYING
+srcs = __main__.py $(basename).py fb*.py *.svg COPYING
 
 app:
 	zip -9 $(zipname) $(srcs)

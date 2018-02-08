@@ -39,6 +39,7 @@ import os.path
 import datetime
 
 from time import time, sleep
+from random import randrange
 
 
 class MainWnd():
@@ -143,6 +144,8 @@ class MainWnd():
         headerbar.set_title(TITLE)
         headerbar.set_subtitle('v%s' % VERSION)
 
+        self.resldr = get_resource_loader(self.env)
+
         self.window.set_titlebar(headerbar)
 
         #self.window.set_title(TITLE_VERSION)
@@ -150,10 +153,13 @@ class MainWnd():
         self.window.set_size_request(1024, 768)
         self.window.set_border_width(WIDGET_SPACING)
 
-        self.dlgabout = AboutDialog(self.window, self.env)
-        self.window.set_icon(self.dlgabout.windowicon)
+        self.resldr = get_resource_loader(self.env)
 
+
+        self.dlgabout = AboutDialog(self.window, self.resldr)
         self.dlgsetup = SetupDialog(self.window, self.env, self.cfg)
+
+        self.window.set_icon(self.dlgabout.windowicon)
 
         #
         # начинаем напихивать виджеты
@@ -181,18 +187,32 @@ class MainWnd():
         #self.ctlvbox.pack_start(hbtb, False, False, 0)
         hbtb = headerbar
 
+        TBICONSIZE = Gtk.IconSize.BUTTON
+        iconsizepx = Gtk.IconSize.lookup(TBICONSIZE)[1]
+        iconrandomchoice = self.resldr.load_pixbuf('random-choice.svg', iconsizepx, iconsizepx, 'media-playlist-shuffle')
+
         # title, pack_end, handler
         tbitems = (('Настройка', 'preferences-system', 'Настройка программы', False, lambda b: self.change_settings()),
             ('Импорт библиотеки', 'system-run', 'Импорт индекса библиотеки', False, lambda b: self.import_library()),
+            (None, None, None, None, None),
+            ('Случайный выбор', iconrandomchoice, 'Случайный выбор книги', False, lambda b: self.random_book_choice()),
             ('О программе', 'help-about', 'Информация о программе', True, lambda b: self.dlgabout.run()),)
 
-        for label, iconname, tooltip, toend, handler in tbitems:
-            btn = Gtk.Button.new_from_icon_name(iconname, Gtk.IconSize.BUTTON)# (label)
-            btn.set_tooltip_text(tooltip)
-            btn.connect('clicked', handler)
+        for label, icon, tooltip, toend, handler in tbitems:
+            if label is None:
+                wgt = Gtk.HSeparator()
+            else:
+                if isinstance(icon, str):
+                    wgt = Gtk.Button.new_from_icon_name(icon, TBICONSIZE)# (label)
+                else:
+                    wgt = Gtk.Button.new()
+                    wgt.set_image(Gtk.Image.new_from_pixbuf(icon))
 
-            self.tasksensitivewidgets.append(btn)
-            (hbtb.pack_end if toend else hbtb.pack_start)(btn)#, False, False, 0)
+                wgt.set_tooltip_text(tooltip)
+                wgt.connect('clicked', handler)
+
+            self.tasksensitivewidgets.append(wgt)
+            (hbtb.pack_end if toend else hbtb.pack_start)(wgt)
 
         #
         # морда будет из двух вертикальных панелей
@@ -416,6 +436,19 @@ class MainWnd():
 
         finally:
             self.task_end()
+
+    def random_book_choice(self):
+        """Случайный выбор книги"""
+
+        # сначала выбираем случайный выбиральник
+
+        npage = randrange(len(self.choosers))
+        self.chooserpages.set_current_page(npage)
+
+        # выбираем случайный элемент в выбиральнике
+        if self.choosers[npage].random_choice():
+            # ...и случайную книгу в списке книг
+            self.booklist.random_choice()
 
     def chooser_page_switched(self, nbook, page, pagenum):
         self.choosers[pagenum].do_on_choosed()

@@ -28,6 +28,8 @@ from gi.repository.GdkPixbuf import Pixbuf
 
 import os.path
 import zipfile
+from sys import stderr
+from random import randrange
 
 
 # отступы между виджетами, дабы не вырвало от пионерского вида гуя
@@ -172,6 +174,27 @@ class TreeViewer():
 
             self.colmap[col] = coldef.tooltip
 
+    def select_item_ix(self, ix):
+        """Выбор в списке элемента с номером ix"""
+
+        path = Gtk.TreePath.new_from_indices((ix,))
+        self.selection.select_path(path)
+        self.view.scroll_to_cell(path, None, True, True, False)
+
+    def random_choice(self):
+        """Выбор случайного элемента в списке.
+
+        Возвращает True в случае успеха,
+        False в случае пустого списка."""
+
+        nitems = self.store.iter_n_children()
+        if nitems <= 0:
+            return False
+
+        self.select_item_ix(randrange(nitems))
+
+        return True
+
 
 def msg_dialog(parent, title, msg, msgtype=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.OK):
     dlg = Gtk.MessageDialog(parent, 0, msgtype, buttons, msg)#, use_header_bar=True)
@@ -282,7 +305,7 @@ def get_resource_loader(env):
     """Возвращает экземпляр класса FileResourceLoader
     или ZipFileResourceLoader, в зависимости от значения env.appIsZIP.
 
-    env - экземпляр класса fbenv.Environment."""
+    env     - экземпляр класса fbenv.Environment."""
 
     return ZipFileResourceLoader(env) if env.appIsZIP else FileResourceLoader(env);
 
@@ -295,7 +318,7 @@ class FileResourceLoader():
     def __init__(self, env):
         """Инициализация.
 
-        env - экземпляр класса fbenv.Environment."""
+        env     - экземпляр класса fbenv.Environment."""
 
         self.env = env
 
@@ -340,14 +363,26 @@ class FileResourceLoader():
         return Pixbuf.new_from_stream_at_scale(Gio.MemoryInputStream.new_from_bytes(b),
             width, height, True)
 
-    def load_pixbuf(self, filename, width, height):
+    def load_pixbuf(self, filename, width, height, fallback=None):
         """Загружает файл в память и возвращает экземпляр Gdk.Pixbuf.
 
-        filename - имя файла (см. load_bytes),
-        width, height - размеры создаваемого изображения в пикселах."""
+        filename        - имя файла (см. load_bytes),
+        width, height   - размеры создаваемого изображения в пикселах,
+        fallback        - имя стандартной иконки, которая будет загружена,
+                          если не удалось загрузить файл filename;
+                          если fallback=None - генерируется исключение."""
 
-        return self.pixbuf_from_bytes(self.load_bytes(filename),
-            width, height)
+        try:
+            return self.pixbuf_from_bytes(self.load_bytes(filename),
+                width, height)
+        except Exception as ex:
+            print('Не удалось загрузить файл изображения "%s" - %s' % (filename, str(ex)), file=stderr)
+            if fallback is None:
+                raise ex
+            else:
+                print('Загружаю стандартное изображение "%s"' % fallback, file=stderr)
+                return Gtk.IconTheme.get_default().load_icon(fallback, height, Gtk.IconLookupFlags.FORCE_SIZE)
+
 
 
 class ZipFileResourceLoader(FileResourceLoader):
@@ -377,11 +412,12 @@ if __name__ == '__main__':
 
     import fbenv
 
-    msg_dialog(None, 'Проверка', 'Проверка диалога')
-    exit(0)
+    #msg_dialog(None, 'Проверка', 'Проверка диалога')
+    #exit(0)
+
     env = fbenv.Environment()
     ldr = get_resource_loader(env)
     print('loader type:', type(ldr))
 
-    b = ldr.load_pixbuf('flibrowser.svg', 64, 64)
+    b = ldr.load_pixbuf('flibrowser-2.svg', 64, 64, 'gtk-find')
     print('loaded:', b)
