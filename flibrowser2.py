@@ -159,6 +159,7 @@ class MainWnd():
         self.dlgabout = AboutDialog(self.window, self.resldr)
         self.dlgsetup = SetupDialog(self.window, self.env, self.cfg)
 
+        self.window.set_default_icon(self.dlgabout.windowicon)
         self.window.set_icon(self.dlgabout.windowicon)
 
         #
@@ -189,14 +190,15 @@ class MainWnd():
 
         TBICONSIZE = Gtk.IconSize.BUTTON
         iconsizepx = Gtk.IconSize.lookup(TBICONSIZE)[1]
-        iconrandomchoice = self.resldr.load_pixbuf('random-choice.svg', iconsizepx, iconsizepx, 'media-playlist-shuffle')
+        iconrandomchoice = 'media-playlist-shuffle-symbolic' # во многих т
+        #iconrandomchoice = self.resldr.load_pixbuf('random-choice.svg', iconsizepx, iconsizepx, 'media-playlist-shuffle-symbolic')
 
         # title, pack_end, handler
-        tbitems = (('Настройка', 'preferences-system', 'Настройка программы', False, lambda b: self.change_settings()),
-            ('Импорт библиотеки', 'system-run', 'Импорт индекса библиотеки', False, lambda b: self.import_library()),
+        tbitems = (('Настройка', 'preferences-system-symbolic', 'Настройка программы', False, lambda b: self.change_settings()),
+            ('Импорт библиотеки', 'system-run-symbolic', 'Импорт индекса библиотеки', False, lambda b: self.import_library(True)),
             (None, None, None, None, None),
             ('Случайный выбор', iconrandomchoice, 'Случайный выбор книги', False, lambda b: self.random_book_choice()),
-            ('О программе', 'help-about', 'Информация о программе', True, lambda b: self.dlgabout.run()),)
+            ('О программе', 'help-about-symbolic', 'Информация о программе', True, lambda b: self.dlgabout.run()),)
 
         for label, icon, tooltip, toend, handler in tbitems:
             if label is None:
@@ -207,6 +209,8 @@ class MainWnd():
                 else:
                     wgt = Gtk.Button.new()
                     wgt.set_image(Gtk.Image.new_from_pixbuf(icon))
+
+                wgt.set_relief(Gtk.ReliefStyle.NONE)
 
                 wgt.set_tooltip_text(tooltip)
                 wgt.connect('clicked', handler)
@@ -416,8 +420,22 @@ class MainWnd():
             #print('check db')
             self.lib.init_tables()
 
-    def import_library(self):
-        self.task_begin('Импорт библиотеки')
+    def import_library(self, askconfirm=False):
+        """Процедура импорта библиотеки.
+
+        askconfirm - спрашивать ли подтверждения
+                     (через Gtk.MessageDialog),
+                     если askconfirm=True."""
+
+        S_IMPORT = 'Импорт библиотеки'
+
+        if askconfirm:
+            if msg_dialog(self.window, S_IMPORT,
+                'Импорт библиотеки может быть долгим.\nПродолжить?',
+                buttons=Gtk.ButtonsType.YES_NO) != Gtk.ResponseType.YES:
+                    return
+
+        self.task_begin(S_IMPORT)
         try:
             print('Инициализация БД (%s)...' % self.env.libraryFilePath)
             self.task_msg('Инициализация БД')

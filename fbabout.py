@@ -42,6 +42,7 @@ class AboutDialog():
         resldr      - экземпляр fbgtk.ResourceLoader."""
 
         self.dlgabout = Gtk.AboutDialog(parent=parentwnd)
+            #, use_header_bar=True) - странно ведёт себя не в GNOME
 
         try:
             logo = resldr.load_bytes(self.ICONNAME)
@@ -52,7 +53,7 @@ class AboutDialog():
             print('Не удалось загрузить файл изображения "%s" - %s' % (self.ICONNAME, str(ex)))
             self.windowicon = Gtk.IconTheme.get_default().load_icon('gtk-find', LOGO_SIZE, Gtk.IconLookupFlags.FORCE_SIZE)
 
-        self.dlgabout.set_icon(self.windowicon)
+        #self.dlgabout.set_icon(self.windowicon)
 
         self.dlgabout.set_size_request(WIDGET_WIDTH_UNIT*24, WIDGET_WIDTH_UNIT*32)
         self.dlgabout.set_copyright(COPYRIGHT)

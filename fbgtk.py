@@ -197,7 +197,9 @@ class TreeViewer():
 
 
 def msg_dialog(parent, title, msg, msgtype=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.OK):
-    dlg = Gtk.MessageDialog(parent, 0, msgtype, buttons, msg)#, use_header_bar=True)
+    dlg = Gtk.MessageDialog(parent, 0, msgtype, buttons, msg,
+        #use_header_bar=True, # странно ведёт себя в GNOME, кто б мог подумать?
+        flags=Gtk.DialogFlags.MODAL|Gtk.DialogFlags.DESTROY_WITH_PARENT)
     dlg.set_title(title)
     r = dlg.run()
     dlg.destroy()
@@ -412,8 +414,8 @@ if __name__ == '__main__':
 
     import fbenv
 
-    #msg_dialog(None, 'Проверка', 'Проверка диалога')
-    #exit(0)
+    msg_dialog(None, 'Проверка', 'Проверка диалога')
+    exit(0)
 
     env = fbenv.Environment()
     ldr = get_resource_loader(env)
