@@ -48,11 +48,11 @@
 
 Всё сложнее:
 
-1. С http://python.org берется установщик Python 3.4.x (т.к. на момент написания
-   этого README Python версии 3.5 и новее не поддерживаются виндовым
+1. С <http://python.org> берется установщик Python 3.4.x (т.к. на момент написания
+   этого документа Python версии 3.5 и новее не поддерживаются виндовым
    портом PyGObject)
 2. PyGObject (с GTK 3.x в комплекте) ищется по ссылкам здесь:
-   http://pygobject.readthedocs.io/en/latest/guide/faq.html
+   <http://pygobject.readthedocs.io/en/latest/guide/faq.html>
    где должен найтись установщик pygi-aio-3.*.exe версии 3.18 или новее.
    В нем при установке нужно указать установленную версию питона,
    выбрать в списках пакетов GDK-Pixbuf, GTK 3.x и Pango.
