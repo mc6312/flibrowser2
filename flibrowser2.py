@@ -179,44 +179,57 @@ class MainWnd():
         self.tasksensitivewidgets.append(self.ctlvbox)
 
         #
-        # меню или тулбар (потом окончательно решу)
+        # меню
         #
 
-        # Gtk.Toolbar - фпень, он уродский; меню тоже - слишком жирно из-за 3х элементов городить
-        # пока так, а там видно будет
-        #hbtb = Gtk.HBox(spacing=WIDGET_SPACING)
-        #self.ctlvbox.pack_start(hbtb, False, False, 0)
-        hbtb = headerbar
+        #
+        # плевал я, что deprecated.
+        # Gtk.Builder и уёбищным говноблёвом под названием Glade пользоваться не буду
+        #
+        #'emblem-system-symbolic'
+        actions = Gtk.ActionGroup('ui')
+        actions.add_actions(
+            # action-name,stock-id,label,accel,toltip,callback
+            (('file', Gtk.STOCK_HOME, None, None, None, None),
+                # 'help-about-symbolic'
+                ('fileAbout', Gtk.STOCK_ABOUT, 'О программе',
+                    '<Alt>F1', 'Информация о программе', lambda b: self.dlgabout.run()),
+                # 'media-playlist-shuffle-symbolic'
+                ('fileRandomChoice', None, 'Случайный выбор',
+                    '<Control>r', 'Случайный выбор книги', lambda b: self.random_book_choice()),
+                # 'document-save-symbolic'
+                ('fileExtractBooks', Gtk.STOCK_SAVE, 'Извлечь книги',
+                    '<Control>e', 'Извлечь выбранные книги из библиотеки', lambda b: self.extract_books()),
+                # 'preferences-system-symbolic'
+                ('fileSettings', Gtk.STOCK_PREFERENCES, 'Настройка',
+                    None, 'Настройка программы', lambda b: self.change_settings()),
+                # 'application-exit-symbolic'
+                ('fileExit', Gtk.STOCK_QUIT, 'Выход',
+                    '<Control>q', 'Завершить программу', self.destroy),
+            ))
 
-        TBICONSIZE = Gtk.IconSize.BUTTON
-        iconsizepx = Gtk.IconSize.lookup(TBICONSIZE)[1]
-        iconrandomchoice = 'media-playlist-shuffle-symbolic' # во многих т
-        #iconrandomchoice = self.resldr.load_pixbuf('random-choice.svg', iconsizepx, iconsizepx, 'media-playlist-shuffle-symbolic')
+        uimgr = Gtk.UIManager()
+        uimgr.insert_action_group(actions)
+        uimgr.add_ui_from_string(u'''<ui><menubar name="menu" >
+            <menu name="mnuFile" action="file">
+                <menuitem name="mnuFileAbout" action="fileAbout"/>
+                <menuitem name="mnuFileRandomChoice" action="fileRandomChoice"/>
+                <menuitem name="mnuFileExtractBooks" action="fileExtractBooks"/>
+                <separator/>
+                <menuitem name="mnuFileSettings" action="fileSettings"/>
+                <separator/>
+                <menuitem name="mnuFileExit" action="fileExit"/>
+            </menu>
+            </menubar></ui>''')
 
-        # title, pack_end, handler
-        tbitems = (('Настройка', 'preferences-system-symbolic', 'Настройка программы', False, lambda b: self.change_settings()),
-            ('Импорт библиотеки', 'system-run-symbolic', 'Импорт индекса библиотеки', False, lambda b: self.import_library(True)),
-            (None, None, None, None, None),
-            ('Случайный выбор', iconrandomchoice, 'Случайный выбор книги', False, lambda b: self.random_book_choice()),
-            ('О программе', 'help-about-symbolic', 'Информация о программе', True, lambda b: self.dlgabout.run()),)
+        mnu = uimgr.get_widget('/ui/menu')
+        self.tasksensitivewidgets.append(mnu)
+        uimgr.get_widget('/ui/menu/mnuFile').set_label('')
+        headerbar.pack_start(mnu)
 
-        for label, icon, tooltip, toend, handler in tbitems:
-            if label is None:
-                wgt = Gtk.HSeparator()
-            else:
-                if isinstance(icon, str):
-                    wgt = Gtk.Button.new_from_icon_name(icon, TBICONSIZE)# (label)
-                else:
-                    wgt = Gtk.Button.new()
-                    wgt.set_image(Gtk.Image.new_from_pixbuf(icon))
+        self.window.add_accel_group(uimgr.get_accel_group())
 
-                wgt.set_relief(Gtk.ReliefStyle.NONE)
-
-                wgt.set_tooltip_text(tooltip)
-                wgt.connect('clicked', handler)
-
-            self.tasksensitivewidgets.append(wgt)
-            (hbtb.pack_end if toend else hbtb.pack_start)(wgt)
+        self.mnuitemExtractBooks = uimgr.get_widget('/ui/menu/mnuFile/mnuFileExtractBooks')
 
         #
         # морда будет из двух вертикальных панелей
@@ -235,10 +248,17 @@ class MainWnd():
         #
         # в левой панели - алфавитные списки авторов и циклов
         #
-        self.chooserpages = Gtk.Notebook()
-        self.chooserpages.set_size_request(WIDGET_WIDTH_UNIT*24, -1)
 
-        self.roothpaned.pack1(self.chooserpages, True, False)
+        fr, fl = create_labeled_frame('_1. Выбор')
+        self.roothpaned.pack1(fr, True, False)
+
+        self.chooserpages = Gtk.Notebook()
+        self.chooserpages.set_border_width(WIDGET_SPACING)
+        self.chooserpages.set_size_request(WIDGET_WIDTH_UNIT*24, -1)
+        self.chooserpages.set_show_border(False)
+
+        fr.add(self.chooserpages)
+        fl.set_mnemonic_widget(self.chooserpages)
 
         self.choosers = []
 
@@ -259,13 +279,14 @@ class MainWnd():
         # в правой панели - список книг соотв. автора и управление распаковкой
         #
 
-        self.bookframe = Gtk.Frame.new('Книги')
-        self.roothpaned.pack2(self.bookframe, True, False)
+        self.bookcount = Gtk.Label('0')
+        bookframe, bl = create_labeled_frame('_2. Книги:', self.bookcount)
+        self.roothpaned.pack2(bookframe, True, False)
 
         bpanel = Gtk.VBox(spacing=WIDGET_SPACING)
         bpanel.set_size_request(WIDGET_WIDTH_UNIT*20, -1) #!!!
         bpanel.set_border_width(WIDGET_SPACING)
-        self.bookframe.add(bpanel)
+        bookframe.add(bpanel)
 
         # список книг
         self.booklist = TreeViewer(
@@ -279,6 +300,8 @@ class MainWnd():
                 TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
                 TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True),
                 TreeViewer.ColDef(self.COL_BOOK_DATE, 'Дата', markup=True, tooltip=self.COL_BOOK_SERIES)))
+
+        bl.set_mnemonic_widget(self.booklist.view)
 
         #print(self.booklist.colmap)
 
@@ -300,20 +323,25 @@ class MainWnd():
         # панель с виджетами извлечения книг
         #
 
-        self.extractframe = Gtk.Frame.new('Выбрано книг: 0')
+        self.selbookcount = Gtk.Label('0')
+        extractframe, efl = create_labeled_frame('_3. Выбрано книг:')
+
         xfbox = Gtk.HBox(spacing=WIDGET_SPACING)
         xfbox.set_border_width(WIDGET_SPACING)
-        self.extractframe.add(xfbox)
-        self.ctlvbox.pack_start(self.extractframe, False, False, 0)
+        extractframe.add(xfbox)
+        self.ctlvbox.pack_start(extractframe, False, False, 0)
 
         # внезапно, кнопка
         self.btnextract = Gtk.Button('Извлечь')
         self.btnextract.connect('clicked', lambda b: self.extract_books())
         xfbox.pack_start(self.btnextract, False, False, 0)
 
+        #!!!efl.set_mnemonic_widget(self.btnextract)
+
         # выбор каталога
         xfbox.pack_start(Gtk.Label('в каталог'), False, False, 0)
         self.destdirchooser = Gtk.FileChooserButton.new('Выбор каталога для извлечения книг', Gtk.FileChooserAction.SELECT_FOLDER)
+        efl.set_mnemonic_widget(self.destdirchooser)
 
         self.destdirchooser.set_filename(self.cfg.get_param(self.cfg.EXTRACT_TO_DIRECTORY, os.path.expanduser('~')))
         self.destdirchooser.set_create_folders(True)
@@ -520,8 +548,10 @@ class MainWnd():
                 self.booksSelected.append(self.booklist.store.get_value(self.booklist.store.get_iter(row), self.COL_BOOK_ID))
 
         nselbooks = len(self.booksSelected)
-        self.btnextract.set_sensitive(nselbooks > 0)
-        self.extractframe.set_label('Выбрано книг: %d' % nselbooks)
+
+        self.set_widgets_sensitive((self.btnextract, self.mnuitemExtractBooks), nselbooks > 0)
+        #
+        self.selbookcount.set_text(str(nselbooks))
 
     def dest_dir_changed(self, chooser):
         self.cfg.set_param(self.cfg.EXTRACT_TO_DIRECTORY, chooser.get_filename())
@@ -640,7 +670,7 @@ class MainWnd():
         self.booklist.view.set_search_column(self.COL_BOOK_TITLE)
         self.booklist.view.set_search_equal_func(self.booklist_search_func)
 
-        self.bookframe.set_label('Книги (%d из %s)' % (nbooks, stotalbooks))
+        self.bookcount.set_text('(%d из %s)' % (nbooks, stotalbooks))
 
     def booklist_search_func(self, model, column, key, _iter, data=None):
         """Штатная функция сравнивает key с началом строки в столбце column,

@@ -53,6 +53,30 @@ def create_scwindow():
     return scwindow
 
 
+def create_labeled_frame(txt, *widgets):
+    """Создаёт экземпляры Gtk.Frame и Gtk.Label.
+
+    txt     - текст для заголовка Frame,
+    widgets - необязательный произвольный список доп. виджетов,
+              добавляемых в заголовок.
+
+    Возвращает Frame и Label."""
+
+    hbox = Gtk.HBox(spacing=WIDGET_SPACING)
+
+    lab = Gtk.Label(txt)
+    lab.set_use_underline(True)
+    hbox.pack_start(lab, False, False, 0)
+
+    for wgt in widgets:
+        hbox.pack_start(wgt, False, False, 0)
+
+    fr = Gtk.Frame()
+    fr.set_label_widget(hbox)
+
+    return fr, lab
+
+
 def create_aligned_label(title, halign=0.0, valign=0.0):
     label = Gtk.Label(title)
     label.set_alignment(halign, valign)
