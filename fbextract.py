@@ -24,7 +24,22 @@
 import zipfile
 import fblib
 import fbenv
-import os.path
+import os, os.path
+
+
+INVALID_FN_CHARS = '<>:"/\|?*'
+
+def validate_fname_charset(s):
+    """Замена в имени файла недопустимых символов.
+    Недопустимые символы заменяются на "_"."""
+
+    return ''.join(map(lambda c: '_' if c < ' ' or c in INVALID_FN_CHARS else c, s))
+
+def validate_dname_charset(s):
+    """Замена в имени каталога недопустимых символов.
+    Недопустимые символы заменяются на "_"."""
+
+    return os.path.join(*map(validate_fname_charset, s.split(os.sep)))
 
 
 class BookExtractor():
@@ -156,9 +171,9 @@ class BookExtractor():
                                             dstfname = bookfname
 
                                         # имя файла всегда содержит bookid - независимо от шаблона
-                                        dstfname = '%d %s.%s' % (bookid, dstfname, bookftype)
+                                        dstfname = validate_fname_charset('%d %s.%s' % (bookid, dstfname, bookftype))
 
-                                        dstfpath = os.path.join(extractdir, dstsubdir)
+                                        dstfpath = os.path.join(extractdir, validate_dname_charset(dstsubdir))
 
                                         if dstsubdir and dstsubdir not in createddirs:
                                             if not os.path.exists(dstfpath):
@@ -167,7 +182,7 @@ class BookExtractor():
 
                                             createddirs.add(dstsubdir)
 
-                                        print('создаю файл файл "%s"' % dstfname)
+                                        print('создаю файл "%s"' % dstfname)
                                         dstfpath = os.path.join(dstfpath, dstfname)
 
                                         with open(dstfpath, 'wb+') as dstf:
@@ -204,6 +219,11 @@ class BookExtractor():
 
 if __name__ == '__main__':
     print('[test]')
+
+    print('f', validate_fname_charset('опа/хопа:муу'))
+    print('d', validate_dname_charset('опа/хопа:муу'))
+    exit(0)
+
 
     import fbenv
     import fblib

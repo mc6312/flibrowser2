@@ -568,30 +568,31 @@ class MainWnd():
 
     def extract_books(self):
         """Извлечение выбранных в списке книг"""
-        self.task_begin('Извлечение книг...')
-        try:
-            em = ''
-            ei = Gtk.MessageType.WARNING
+        if self.booksSelected:
+            self.task_begin('Извлечение книг...')
             try:
-                em = self.extractor.extract(self.booksSelected,
-                    fbfntemplate.templates[self.extractTemplateIndex],
-                    self.task_progress)
+                em = ''
+                ei = Gtk.MessageType.WARNING
+                try:
+                    em = self.extractor.extract(self.booksSelected,
+                        fbfntemplate.templates[self.extractTemplateIndex],
+                        self.task_progress)
 
-            except Exception as ex:
+                except Exception as ex:
+                    if em:
+                        em += '\n'
+                    elif em is None:
+                        em = ''
+
+                    exs = str(ex)
+                    em += exs if exs else ex.__class__.__error__
+                    ei = Gtk.MessageType.ERROR
+
                 if em:
-                    em += '\n'
-                elif em is None:
-                    em = ''
+                    msg_dialog(self.window, 'Извлечение книг', em, ei)
 
-                exs = str(ex)
-                em += exs if exs else ex.__class__.__error__
-                ei = Gtk.MessageType.ERROR
-
-            if em:
-                msg_dialog(self.window, 'Извлечение книг', em, ei)
-
-        finally:
-            self.task_end()
+            finally:
+                self.task_end()
 
     def get_total_book_count(self):
         """Возвращает общее количество книг в БД"""
