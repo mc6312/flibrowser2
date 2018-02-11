@@ -190,11 +190,11 @@ class MainWnd():
         # плевал я, что deprecated.
         # Gtk.Builder и уёбищным говноблёвом под названием Glade пользоваться не буду
         #
-        #'emblem-system-symbolic'
+
         actions = Gtk.ActionGroup('ui')
         actions.add_actions(
             # action-name,stock-id,label,accel,toltip,callback
-            (('file', None, None, None, None, None),
+            (('file', None, '☰', None, None, None),
                 # 'help-about-symbolic'
                 ('fileAbout', Gtk.STOCK_ABOUT, 'О программе',
                     '<Alt>F1', 'Информация о программе', lambda b: self.dlgabout.run()),
@@ -214,8 +214,8 @@ class MainWnd():
 
         uimgr = Gtk.UIManager()
         uimgr.insert_action_group(actions)
-        uimgr.add_ui_from_string(u'''<ui>
-            <popup name="mnuFile" action="file">
+        uimgr.add_ui_from_string(u'''<ui><menubar>
+            <menu name="mnuFile" action="file">
                 <menuitem name="mnuFileAbout" action="fileAbout"/>
                 <menuitem name="mnuFileRandomChoice" action="fileRandomChoice"/>
                 <menuitem name="mnuFileExtractBooks" action="fileExtractBooks"/>
@@ -223,23 +223,18 @@ class MainWnd():
                 <menuitem name="mnuFileSettings" action="fileSettings"/>
                 <separator/>
                 <menuitem name="mnuFileExit" action="fileExit"/>
-            </popup>
+            </menu></menubar>
             </ui>''')
 
         #self.tasksensitivewidgets.append(mnu)
 
-        mnufile = uimgr.get_widget('/ui/mnuFile')
+        mnufile = uimgr.get_widget('/ui/menubar')#'/mnuFile')
 
-        mnubtn = Gtk.MenuButton.new()
-        mnubtn.set_image(Gtk.Image.new_from_icon_name('go-home-symbolic', Gtk.IconSize.MENU))
-        mnubtn.set_relief(Gtk.ReliefStyle.NONE)
-        mnubtn.set_popup(mnufile)
-
-        headerbar.pack_start(mnubtn)
+        headerbar.pack_start(mnufile)
 
         self.window.add_accel_group(uimgr.get_accel_group())
 
-        self.mnuitemExtractBooks = uimgr.get_widget('/ui/mnuFile/mnuFileExtractBooks')
+        self.mnuitemExtractBooks = uimgr.get_widget('/ui/menubar/mnuFile/mnuFileExtractBooks')
 
         #
         # морда будет из двух вертикальных панелей
