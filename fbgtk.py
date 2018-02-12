@@ -26,16 +26,22 @@ require_version('Gtk', GTK_VERSION) # извращенцы
 from gi.repository import Gtk, Gdk, GObject, Pango, GLib, Gio
 from gi.repository.GdkPixbuf import Pixbuf
 
+import cairo
+
 import os.path
 import zipfile
 from sys import stderr
 from random import randrange
-
+from math import pi
 
 # отступы между виджетами, дабы не вырвало от пионерского вида гуя
 
-WIDGET_WIDTH_UNIT = Gtk.IconSize.lookup(Gtk.IconSize.MENU)[1]
-WIDGET_SPACING = WIDGET_WIDTH_UNIT / 4
+__pangoContext = Gdk.pango_context_get()
+
+WIDGET_BASE_UNIT = int(__pangoContext.get_metrics(__pangoContext.get_font_description(),
+    None).get_approximate_char_width() / Pango.SCALE)
+
+WIDGET_SPACING = WIDGET_BASE_UNIT // 2
 if WIDGET_SPACING < 4:
     WIDGET_SPACING = 4
 
@@ -137,7 +143,13 @@ class TreeViewer():
         Параметры:
             coltypes    - список типов данных для столбцов *Store
                           (GObject.TYPE_*),
-            coldefs     - список экземпляров TreeViewer.ColDef
+            coldefs     - список параметров столбцов, где элементы списка
+                          либо экземпляры TreeViewer.ColDef,
+                          либо списки/кортежи экземпляров TreeViewer.ColDef,
+                          в последнем случае в одном столбце размещается
+                          несколько Gtk.CellRenderer'ов, а значения title,
+                          expand и tooltip для TreeViewColumn берётся
+                          из первого элемента списка
             islist      - если True - создаётся ListStore, иначе TreeStore
 
         Поля:
@@ -145,6 +157,7 @@ class TreeViewer():
             store       - экземпляр Gtk.Tree|ListStore
             selection   - экземпляр Gtk.TreeViewSelection
             window      - экземпляр Gtk.ScrolledWindow
+            columns     - список экземпляров Gtk.TreeViewColumn
             renderers   - список экземпляров Gtk.CellRenderer*
             colmap      - словарь, где ключи - экземпляры Gtk.TreeViewColumn,
                           а значения - индексы соотв. столбцов в store
@@ -163,9 +176,10 @@ class TreeViewer():
         self.window.add(self.view)
 
         self.renderers = []
+        self.columns = []
         self.colmap = {}
 
-        for coldef in coldefs:
+        def __pack_col(col, coldef):
             ctype = coltypes[coldef.index]
 
             if ctype == GObject.TYPE_BOOLEAN:
@@ -187,16 +201,27 @@ class TreeViewer():
                 raise ValueError('%s.__init__: неподдерживаемый тип данных столбца Gtk.ListStore' % self.__class__.__name__)
 
             self.renderers.append(crt)
-
-            col = Gtk.TreeViewColumn(coldef.title, crt)
+            col.pack_start(crt, coldef.expand)
             col.add_attribute(crt, crtpar, coldef.index)
-            col.set_sizing(Gtk.TreeViewColumnSizing.GROW_ONLY)
-            col.set_resizable(coldef.expand)
-            col.set_expand(coldef.expand)
+
+        for coldef in coldefs:
+            col = Gtk.TreeViewColumn.new()
+            self.columns.append(col)
+
+            if isinstance(coldef, (list, tuple)):
+                for subcoldef in coldef:
+                    __pack_col(col, subcoldef)
+                params = coldef[0]
+            else:
+                __pack_col(col, coldef)
+                params = coldef
 
             self.view.append_column(col)
-
-            self.colmap[col] = coldef.tooltip
+            col.set_title(params.title)
+            col.set_sizing(Gtk.TreeViewColumnSizing.GROW_ONLY)
+            col.set_resizable(params.expand)
+            col.set_expand(params.expand)
+            self.colmap[col] = params.tooltip
 
     def select_item_ix(self, ix):
         """Выбор в списке элемента с номером ix"""
@@ -230,48 +255,112 @@ def msg_dialog(parent, title, msg, msgtype=Gtk.MessageType.WARNING, buttons=Gtk.
     return r
 
 
-BOOK_AGE_COLORS = ('#00FF00',
-    '#A8FF00',
-    '#B8FF00',
-    '#FFFF00',
-    '#FFF400',
-    '#FFD700',
-    '#FFB900',
-    '#FF9C00',
-    '#FF7A00',
-    '#FF5A00',
-    '#FF3A00',
-    '#FF1B00',
-    '#EE2D1A',
-    '#E03C2F',
-    '#D34A43',
-    '#C55958',
-    '#B8676D',
-    '#AA7681',
-    '#9D8496',
-    '#8F93AA')
+class BookAgeIcons():
+    """Класс, создающий и хранящий список GdkPixbuf для отображения
+    "свежести" книг в виде цветовых меток."""
 
-BOOK_AGE_MAX = len(BOOK_AGE_COLORS) - 1
+    # потом когда-нибудь надо будет присобачить загрузку палитры из файла
 
-def get_book_age_color(nowdate, bookdate):
-    """Возвращает цвет в виде "#RRGGBB", соответствующий "свежести" книги.
-    Готовой функции, считающей в месяцах, в стандартной библиотеке нет,
-    возиться с точными вычислениями, учитывающими месяцы разной длины
-    и високосные года, а также обвешивать софтину зависимостями на
-    сторонние библиотеки мне влом, а потому "свежесть" считается
-    в четырёхнедельных промежутках от текущей даты (nowdate).
+    BOOK_AGE_COLORS = ('#00FF00',
+        '#A8FF00',
+        '#B8FF00',
+        '#FFFF00',
+        '#FFF400',
+        '#FFD700',
+        '#FFB900',
+        '#FF9C00',
+        '#FF7A00',
+        '#FF5A00',
+        '#FF3A00',
+        '#FF1B00',
+        '#EE2D1A',
+        '#E03C2F',
+        '#D34A43',
+        '#C55958',
+        '#B8676D',
+        '#AA7681',
+        '#9D8496',
+        '#8F93AA')
 
-    nowdate, bookdate - экземпляры dateitme.date или dateitme.datetime."""
+    BOOK_AGE_MAX = len(BOOK_AGE_COLORS) - 1
 
-    delta = (nowdate - bookdate).days // 28
+    def __init__(self, iconSize):
+        """Создание списка икон (экземпляров GdkPixbuf.Pixbuf).
 
-    if delta < 0:
-        # нет гарантии, что в БД лежала правильная дата
-        delta = 0
-    elif delta > BOOK_AGE_MAX:
-        delta = BOOK_AGE_MAX
+        iconSize - константа Gtk.IconSize.*."""
 
-    return BOOK_AGE_COLORS[delta]
+        _ok, self.iconSizePx, ih = Gtk.IconSize.lookup(iconSize)
+        # прочие возвращённые значения фпень - у нас тут иконки строго квадратные
+
+        self.icons = []
+
+        for color in self.BOOK_AGE_COLORS:
+            self.icons.append(self.__create_icon(color))
+
+    def __create_icon(self, color):
+        """Создаёт и возвращает экземпляр GdkPixbuf.Pixbuf заданного цвета.
+
+        color - значение цвета в виде строки "#RRGGBB"."""
+
+        _ok, gclr = Gdk.Color.parse(color)
+        gclr = gclr.to_floats()
+
+        csurf = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.iconSizePx, self.iconSizePx)
+
+        cc = cairo.Context(csurf)
+        #cc.scale(iconSize, iconSize)
+
+        center = self.iconSizePx / 2.0
+        radius = center * 0.7
+        circle = 2 * pi
+
+        cc.set_source(cairo.SolidPattern(0.0, 0.0, 0.0))
+
+        cc.arc(center, center, radius, 0.0, circle)
+        cc.fill()
+
+        radius1 = radius - 1.0
+
+        cc.set_source(cairo.SolidPattern(*gclr))
+        cc.arc(center, center, radius1, 0.0, circle)
+        cc.fill()
+
+        return Gdk.pixbuf_get_from_surface(csurf, 0, 0, self.iconSizePx, self.iconSizePx)
+
+    def __get_book_age_index(self, nowdate, bookdate):
+        """Возвращает индекс в диапазоне 0..BOOK_AGE_MAX, соответствующий
+        "свежести" книги.
+        Готовой функции, считающей в месяцах, в стандартной библиотеке нет,
+        возиться с точными вычислениями, учитывающими месяцы разной длины
+        и високосные года, а также обвешивать софтину зависимостями на
+        сторонние библиотеки мне влом, а потому "свежесть" считается
+        в четырёхнедельных промежутках от текущей даты (nowdate).
+
+        nowdate, bookdate - экземпляры dateitme.date или dateitme.datetime."""
+
+        delta = (nowdate - bookdate).days // 28
+
+        if delta < 0:
+            # нет гарантии, что в БД лежала правильная дата
+            delta = 0
+        elif delta > self.BOOK_AGE_MAX:
+            delta = self.BOOK_AGE_MAX
+
+        return delta
+
+    def get_book_age_color(self, nowdate, bookdate):
+        """Возвращает цвет в виде "#RRGGBB", соответствующий "свежести" книги.
+
+        nowdate, bookdate - экземпляры dateitme.date или dateitme.datetime."""
+
+        return self.BOOK_AGE_COLORS[self.__get_book_age_index(nowdate, bookdate)]
+
+    def get_book_age_icon(self, nowdate, bookdate):
+        """Возвращает экземпляр GdkPixbuf.Pixbuf, соответствующий "свежести" книги.
+
+        nowdate, bookdate - экземпляры dateitme.date или dateitme.datetime."""
+
+        return self.icons[self.__get_book_age_index(nowdate, bookdate)]
 
 
 class LabeledGrid(Gtk.Grid):
@@ -438,7 +527,8 @@ if __name__ == '__main__':
 
     import fbenv
 
-    msg_dialog(None, 'Проверка', 'Проверка диалога')
+    clrs = BookAgeIcons(Gtk.IconSize.MENU)
+    #msg_dialog(None, 'Проверка', 'Проверка диалога')
     exit(0)
 
     env = fbenv.Environment()

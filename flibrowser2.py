@@ -46,7 +46,7 @@ class MainWnd():
     """Основное междумордие"""
 
     COL_BOOK_ID, COL_BOOK_TITLE, COL_BOOK_SERNO, COL_BOOK_SERIES, \
-    COL_BOOK_DATE, COL_BOOK_TOOLTIP = range(6)
+    COL_BOOK_DATE, COL_BOOK_TOOLTIP, COL_BOOK_AGEICON = range(7)
 
     def destroy(self, widget, data=None):
         Gtk.main_quit()
@@ -150,11 +150,10 @@ class MainWnd():
 
         #self.window.set_title(TITLE_VERSION)
 
-        self.window.set_size_request(1024, 768)
+        self.window.set_size_request(100 * WIDGET_BASE_UNIT, 76 * WIDGET_BASE_UNIT)
         self.window.set_border_width(WIDGET_SPACING)
 
         self.resldr = get_resource_loader(self.env)
-
 
         self.dlgabout = AboutDialog(self.window, self.resldr)
         self.dlgsetup = SetupDialog(self.window, self.env, self.cfg)
@@ -259,7 +258,7 @@ class MainWnd():
 
         self.chooserpages = Gtk.Notebook()
         self.chooserpages.set_border_width(WIDGET_SPACING)
-        self.chooserpages.set_size_request(WIDGET_WIDTH_UNIT*24, -1)
+        self.chooserpages.set_size_request(WIDGET_BASE_UNIT*24, -1)
         self.chooserpages.set_show_border(False)
 
         fr.add(self.chooserpages)
@@ -289,9 +288,11 @@ class MainWnd():
         self.roothpaned.pack2(bookframe, True, False)
 
         bpanel = Gtk.VBox(spacing=WIDGET_SPACING)
-        bpanel.set_size_request(WIDGET_WIDTH_UNIT*20, -1) #!!!
+        bpanel.set_size_request(WIDGET_BASE_UNIT * 30, -1) #!!!
         bpanel.set_border_width(WIDGET_SPACING)
         bookframe.add(bpanel)
+
+        self.bookageicons = BookAgeIcons(Gtk.IconSize.MENU)
 
         # список книг
         self.booklist = TreeViewer(
@@ -300,11 +301,15 @@ class MainWnd():
                 GObject.TYPE_STRING,# series
                 GObject.TYPE_STRING,# serno
                 GObject.TYPE_STRING,# date
-                GObject.TYPE_STRING),# COL_BOOK_TOOLTIP - подсказка для столбца с названием книги
+                GObject.TYPE_STRING,# COL_BOOK_TOOLTIP - подсказка для столбца с названием книги
+                Pixbuf),            # иконка "свежести" книги
             (TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True, tooltip=self.COL_BOOK_TOOLTIP),
                 TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
                 TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True),
-                TreeViewer.ColDef(self.COL_BOOK_DATE, 'Дата', markup=True, tooltip=self.COL_BOOK_SERIES)))
+                (TreeViewer.ColDef(self.COL_BOOK_AGEICON, 'Дата', tooltip=self.COL_BOOK_SERIES),
+                 TreeViewer.ColDef(self.COL_BOOK_DATE))
+                 )
+            )
 
         bl.set_mnemonic_widget(self.booklist.view)
 
@@ -651,7 +656,9 @@ class MainWnd():
                 date = datetime.datetime.strptime(r[UB_COL_DATE], DB_DATE_FORMAT)
                 # тут, возможно, будет код для показа соответствия "дата - цвет 'свежести' книги"
                 # и/или фильтрация по дате
-                datestr = '<span color="%s">\u25CF</span> %s' % (get_book_age_color(datenow, date), date.strftime(DISPLAY_DATE_FORMAT))
+
+                dateicon = self.bookageicons.get_book_age_icon(datenow, date)
+                datestr = date.strftime(DISPLAY_DATE_FORMAT)
 
                 # дополнительная фильтрация вручную, т.к. sqlite3 "из коробки"
                 # не умеет в collation, и вообще что-то проще сделать не через запросы SQL
@@ -669,7 +676,8 @@ class MainWnd():
                     seriestitle, # seriesnames.title
                     datestr, # date
                     '%s.\n<b>"%s".</b>' % (GLib.markup_escape_text(r[UB_COL_AUTHORNAME], -1),
-                        GLib.markup_escape_text(title, -1))
+                        GLib.markup_escape_text(title, -1)),
+                    dateicon
                     ))
 
         self.booklist.view.set_model(self.booklist.store)

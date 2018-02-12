@@ -22,14 +22,13 @@
 import os.path
 
 from fbcommon import *
+from fbgtk import *
 
 from gi.repository import Gtk, GLib
 from gi.repository.GdkPixbuf import Pixbuf
 
-from fbgtk import *
 
-
-LOGO_SIZE = WIDGET_WIDTH_UNIT*8
+LOGO_SIZE = WIDGET_BASE_UNIT * 10
 
 
 class AboutDialog():
@@ -55,7 +54,7 @@ class AboutDialog():
 
         #self.dlgabout.set_icon(self.windowicon)
 
-        self.dlgabout.set_size_request(WIDGET_WIDTH_UNIT*24, WIDGET_WIDTH_UNIT*32)
+        self.dlgabout.set_size_request(WIDGET_BASE_UNIT * 48, WIDGET_BASE_UNIT * 32)
         self.dlgabout.set_copyright(COPYRIGHT)
         self.dlgabout.set_version('версия %s' % VERSION)
         self.dlgabout.set_program_name(TITLE)
