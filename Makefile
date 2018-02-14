@@ -20,7 +20,7 @@ archive:
 distrib:
 	make app
 	make icon
-	$(pack) $(arcname) $(basename) $(docs) $(basename).ico
+	$(pack) $(basename)-$(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')$(arcx) $(basename) $(docs) $(basename).ico
 icon:
 	convert $(basename).svg $(basename).ico
 backup:
