@@ -78,7 +78,7 @@ class Database():
             raise Exception('%s.init_tables(): БД не подключена!' % self.__class__.__name__)
         else:
             for dbname, dbflds in self.TABLES:
-                self.cursor.execute('''create table if not exists %s(%s)''' % (dbname, dbflds))
+                self.cursor.execute('''CREATE TABLE IF NOT EXISTS %s(%s)''' % (dbname, dbflds))
 
     def reset_tables(self):
         """Удаление и пересоздание таблиц в БД.
@@ -89,10 +89,10 @@ class Database():
             raise Exception('%s.init_tables(): БД не подключена!' % self.__class__.__name__)
         else:
             for dbname, dbflds in self.TABLES:
-                self.cursor.execute('''drop table if exists %s;''' % dbname)
+                self.cursor.execute('''DROP TABLE IF EXISTS %s;''' % dbname)
 
             if self.vacuumOnInit:
-                self.connection.execute('vacuum;')
+                self.connection.execute('VACUUM;')
 
         self.init_tables()
 

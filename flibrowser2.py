@@ -625,12 +625,12 @@ class MainWnd():
 
         if self.bookListUpdateColValue is not None:
             # получаем список книг
-            q = '''select bookid,books.title,serno,seriesnames.title,date,authornames.name
-                from books
-                inner join seriesnames on seriesnames.serid=books.serid
-                inner join authornames on authornames.authorid=books.authorid
-                where books.%s=?
-                order by seriesnames.title, serno, books.title, date;''' % self.bookListUpdateColName
+            q = '''SELECT bookid,books.title,serno,seriesnames.title,date,authornames.name
+                FROM books
+                INNER JOIN seriesnames ON seriesnames.serid=books.serid
+                INNER JOIN authornames ON authornames.authorid=books.authorid
+                WHERE books.%s=?
+                ORDER BY seriesnames.title, serno, books.title, date;''' % self.bookListUpdateColName
             #print(q)
             cur = self.lib.cursor.execute(q, (self.bookListUpdateColValue,))
 

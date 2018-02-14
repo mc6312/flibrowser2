@@ -132,7 +132,7 @@ main DB path: %s''' % (self.configFilePath, self.libraryFilePath))
 class Settings(Database):
     """Работа с БД настроек"""
 
-    TABLES = (('settings', 'name text primary key, value text'),)
+    TABLES = (('settings', 'name TEXT PRIMARY KEY, value TEXT'),)
 
     def __init__(self, env):
         """Инициализация.
@@ -198,7 +198,7 @@ class Settings(Database):
         defvalue    - None или значение по умолчанию, которое ф-я вернет,
                       если параметра нет в БД, или у него пустое значение."""
 
-        self.cursor.execute('select value from settings where name=? limit 1;',
+        self.cursor.execute('SELECT value FROM settings WHERE name=? LIMIT 1;',
             (vname,))
 
         r = self.cursor.fetchone()
@@ -232,7 +232,7 @@ class Settings(Database):
         vname   - имя параметра,
         vvalue  - значение параметра."""
 
-        self.cursor.execute('insert or replace into settings (name, value) values(?,?);',
+        self.cursor.execute('INSERT OR REPLACE INTO settings (name, value) VALUES(?,?);',
             (vname, vvalue))
 
     def set_param_int(self, vname, vvalue):
@@ -259,7 +259,7 @@ class Settings(Database):
         if not self.cursor:
             ret.append('  <database is not connected>')
         else:
-            self.cursor.execute('select name,value from settings;')
+            self.cursor.execute('SELECT name,value FROM settings;')
 
             while True:
                 r = self.cursor.fetchone()

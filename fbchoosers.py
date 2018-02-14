@@ -163,7 +163,7 @@ class AlphaListChooser(FilterChooser):
         self.alphalist.view.set_model(None)
         self.alphalist.store.clear()
 
-        q = 'select %s from %s order by %s;' %\
+        q = 'SELECT %s FROM %s ORDER BY %s;' %\
             (self.COLALPHA, self.ALPHATABLENAME,
             self.COLALPHA)
         #print(q)
@@ -187,7 +187,7 @@ class AlphaListChooser(FilterChooser):
         self.namelist.store.clear()
 
         if self.selectedAlpha is not None:
-            cur = self.lib.cursor.execute('select %s,%s from %s where %s="%s" order by %s;' %\
+            cur = self.lib.cursor.execute('SELECT %s,%s FROM %s WHERE %s="%s" ORDER BY %s;' %\
                 (self.COLNAMEID, self.COLNAMETEXT,
                 self.NAMETABLENAME,
                 self.COLALPHA, self.selectedAlpha,

@@ -95,9 +95,9 @@ class BookExtractor():
         # какого хуя тут нельзя executemany?
 
         for bookid in bookids:
-            cur = self.lib.cursor.execute('''select bundles.filename
-                from books inner join bundles on bundles.bundleid=books.bundleid
-                where bookid=?;''', (bookid,))
+            cur = self.lib.cursor.execute('''SELECT bundles.filename
+                FROM books INNER JOIN bundles ON bundles.bundleid=books.bundleid
+                WHERE bookid=?;''', (bookid,))
             r = cur.fetchone()
             if r is None:
                 em.append('Книга с id=%d отсутствует в БД. Что-то не то с программой...' % bookid)
@@ -132,11 +132,11 @@ class BookExtractor():
                         for bookid in bundlebooks:
                             ixbook += 1
 
-                            cur = self.lib.cursor.execute('''select filename,filetype,books.title,seriesnames.title,serno,authornames.name
-                                from books
-                                inner join seriesnames on seriesnames.serid=books.serid
-                                inner join authornames on authornames.authorid=books.authorid
-                                where bookid=?;''', (bookid,))
+                            cur = self.lib.cursor.execute('''SELECT filename,filetype,books.title,seriesnames.title,serno,authornames.name
+                                FROM books
+                                INNER JOIN seriesnames ON seriesnames.serid=books.serid
+                                INNER JOIN authornames ON authornames.authorid=books.authorid
+                                WHERE bookid=?;''', (bookid,))
 
                             # 0 filename
                             # 1 filetype

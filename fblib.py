@@ -33,29 +33,29 @@ import os.path
 
 class LibraryDB(Database):
     TABLES = (# главная таблица - список книг
-        ('books', '''bookid integer primary key,
-authorid integer,
-title varchar(100), serid integer, serno integer,
-filename varchar(256), filetype varchar(16),
-date varchar(10), language varchar(2), keywords varchar(128),
-bundleid integer'''),
+        ('books', '''bookid INTEGER PRIMARY KEY,
+authorid INTEGER,
+title VARCHAR(100), serid INTEGER, serno INTEGER,
+filename VARCHAR(256), filetype VARCHAR(16),
+date VARCHAR(10), language VARCHAR(2), keywords VARCHAR(128),
+bundleid INTEGER'''),
         # таблица имён авторов
-        ('authornames', '''authorid integer primary key, alpha varchar(1), name varchar(100)'''),
+        ('authornames', '''authorid INTEGER PRIMARY KEY, alpha VARCHAR(1), name VARCHAR(100)'''),
         # первые символы имён авторов
-        ('authornamealpha', '''alpha varchar(1) primary key'''),
+        ('authornamealpha', '''alpha VARCHAR(1) PRIMARY KEY'''),
         # таблица названий циклов/сериалов
-        ('seriesnames', '''serid integer primary key, alpha varchar(1), title varchar(100)'''),
+        ('seriesnames', '''serid INTEGER PRIMARY KEY, alpha VARCHAR(1), title VARCHAR(100)'''),
         # первые символы названий циклов/сериалов
-        ('seriesnamealpha', '''alpha varchar(1) primary key'''),
+        ('seriesnamealpha', '''alpha VARCHAR(1) PRIMARY KEY'''),
         # таблица тэгов
-        ('genretags', '''genreid integer primary key, tag varchar(64)'''),
+        ('genretags', '''genreid INTEGER PRIMARY KEY, tag VARCHAR(64)'''),
         # таблица соответствий жанровых тэгов книжкам
         # таблица genres - БЕЗ primary key!
-        ('genres', '''genreid integer, bookid integer'''),
+        ('genres', '''genreid INTEGER, bookid INTEGER'''),
         # таблица человекочитаемых названий для тэгов
-        ('genrenames', '''tag varchar(64), name varchar(128), category varchar(128)'''),
+        ('genrenames', '''tag VARCHAR(64), name VARCHAR(128), category VARCHAR(128)'''),
         # таблица имён файлов архивов с книгами
-        ('bundles', '''bundleid integer primary key, filename varchar(256)'''))
+        ('bundles', '''bundleid INTEGER PRIMARY KEY, filename VARCHAR(256)'''))
 
     def get_name_first_letter(self, name):
         """Возвращает первый буквенно-цифровой символ из строки name,
@@ -210,7 +210,7 @@ class INPXImporter(INPXFile):
             isunic, valkey = unicdict.is_unical(colvalues[ixuniccol])
 
             if isunic:
-                query = 'insert into %s (%s) values (%s);' % (tablename,
+                query = 'INSERT INTO %s (%s) VALUES (%s);' % (tablename,
                     ','.join(colnames), ','.join('?' * (len(colvalues) + 1)))
 
                 self.library.cursor.execute(query, [valkey] + colvalues)
@@ -223,7 +223,7 @@ class INPXImporter(INPXFile):
         if seriestitle:
             # в алфавитный индекс попадут только книги с названием цикла
             stitlealpha = self.library.get_name_first_letter(seriestitle)
-            self.library.cursor.execute('''insert or replace into seriesnamealpha (alpha) values (?);''', (stitlealpha,))
+            self.library.cursor.execute('''INSERT OR REPLACE INTO seriesnamealpha (alpha) VALUES (?);''', (stitlealpha,))
         else:
             stitlealpha = ''
 
@@ -246,7 +246,7 @@ class INPXImporter(INPXFile):
             (anamealpha, authorname),
             1)
 
-        self.library.cursor.execute('''insert or replace into authornamealpha (alpha) values (?);''', (anamealpha,))
+        self.library.cursor.execute('''INSERT OR REPLACE INTO authornamealpha (alpha) VALUES (?);''', (anamealpha,))
 
         # genresnames: genreid, name (str)
         # genresnames: genreid, name (str)
@@ -264,13 +264,13 @@ class INPXImporter(INPXFile):
         bookid = record[INPXFile.REC_LIBID]
 
         for genreid in genreids:
-            self.library.cursor.execute('''insert into genres (genreid, bookid) values (?,?);''',
+            self.library.cursor.execute('''INSERT INTO genres (genreid, bookid) VALUES (?,?);''',
                 (genreid, bookid))
 
         # насчет 'insert or replace' см. выше в комментарии к методу!
-        self.library.cursor.execute('''insert or replace into books(bookid, authorid,
+        self.library.cursor.execute('''INSERT OR REPLACE INTO books(bookid, authorid,
 title, serid, serno,
-filename, filetype, date, language, keywords, bundleid) values (?,?,?,?,?,?,?,?,?,?,?);''',
+filename, filetype, date, language, keywords, bundleid) VALUES (?,?,?,?,?,?,?,?,?,?,?);''',
             (bookid, authorid,
             record[INPXFile.REC_TITLE],
             serid, record[INPXFile.REC_SERNO],
@@ -326,7 +326,7 @@ def __test_inpx_import(lib, cfg, inpxFileName): #, genreNamesFile):
 
     lib.connection.commit()
 
-    """lib.cursor.execute('select * from books;')
+    """lib.cursor.execute('SELECT * FROM books;')
     while True:
         r = lib.cursor.fetchone()
         if r is None:
@@ -335,13 +335,29 @@ def __test_inpx_import(lib, cfg, inpxFileName): #, genreNamesFile):
         print(r)"""
 
 def __test_book_list(lib):
-    q = '''select books.bookid,books.title,serno,seriesnames.title,date,authornames.name
-            from books
-            inner join seriesnames on seriesnames.serid=books.serid
-            inner join authornames on authornames.authorid=books.authorid
-            where books.bookid in (select bookid from genres limit 500)
-            order by seriesnames.title, serno, books.title, date limit 20;'''
-    cur = lib.cursor.execute(q)
+    """ ебучие тормоза, неприменимые нахрен """
+    q = '''SELECT
+        books.title, group_concat(genretags.tag)
+        FROM books
+        INNER JOIN genretags ON genreid IN (SELECT genreid FROM genres WHERE genres.bookid=books.bookid)
+        GROUP BY books.bookid
+        LIMIT 30;'''
+
+    c = lib.cursor.execute('SELECT bookid FROM books;')
+    r = c.fetchall()
+
+    q = '''SELECT group_concat(tag, ',')
+        FROM genretags WHERE genreid
+            IN (SELECT genreid FROM genres WHERE bookid=?)
+        LIMIT 300;'''
+
+    if r is not None:
+        for v in r:
+            cur = lib.cursor.execute(q, v)
+            r = cur.fetchall()
+            print(r)
+    return
+
     if cur:
         while True:
             r = cur.fetchone()
@@ -352,8 +368,8 @@ def __test_book_list(lib):
 
 
 def __test_genre_list(lib):
-    q = '''select genrenames.name from genrenames
-        inner join genretags on genretags.tag=genrenames.tag;'''
+    q = '''SELECT genrenames.name FROM genrenames
+        INNER JOIN genretags ON genretags.tag=genrenames.tag;'''
 
     cur = lib.cursor.execute(q)
     if cur:
