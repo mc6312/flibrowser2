@@ -38,11 +38,8 @@ class Environment():
     LIBRARY_FILE_NAME = 'library.sqlite3'
     SUBDIR_NAME = 'flibrowser2'
 
-    def __init__(self, useappdir=False):
-        """Определение путей.
-
-        Если useappdir==True, то каталог приложения будет принудительно
-        использован в качестве каталога для всех файлов приложения."""
+    def __init__(self):
+        """Определение путей, разбор командной строки и т.п."""
 
         # путь к самому приложению (flibrowser2[.py|.pyz])
         self.appFilePath = os.path.abspath(sys.argv[0])
@@ -53,11 +50,26 @@ class Environment():
         # каталог самого поделия
         self.appDir = os.path.split(self.appFilePath)[0]
 
+        #
+        # разгребаем командную строку
+        #
+        ENV_DETECT, ENV_APPDIR, ENV_HOME = range(3)
+
+        envmode = ENV_DETECT
+
+        for aix, arg in enumerate(sys.argv[1:], 1):
+            if arg == '--app-dir' or arg == '-A':
+                envmode = ENV_APPDIR
+            elif arg == '--home-dir' or arg == '-H':
+                envmode = ENV_HOME
+            else:
+                raise EnvironmentError('Параметр #%d ("%s") командной строки не поддерживается' % (aix, arg))
+
         # пытаемся определить, из откудова работать
 
         # сначала ищем рядом с самой софтиной
         self.configFilePath = os.path.join(self.appDir, self.CONFIG_FILE_NAME)
-        if useappdir or os.path.exists(self.configFilePath):
+        if (envmode == ENV_APPDIR) or (envmode == ENV_DETECT and os.path.exists(self.configFilePath)):
             # нашелся или указан принидительно - считаем, что там и есть
             # рабочий каталог, и библиотека должна лежать там же
 
@@ -97,6 +109,9 @@ class Environment():
         # определяем пути к файлам
         # (точнее, self.configFilePath уже известен)
         self.libraryFilePath = os.path.join(self.dataDir, self.LIBRARY_FILE_NAME)
+
+        print('''configuration DB path: %s
+main DB path: %s''' % (self.configFilePath, self.libraryFilePath))
 
     def __str__(self):
         """Отображение для отладки"""
@@ -261,6 +276,7 @@ if __name__ == '__main__':
 
     env = Environment()
     print(env)
+    exit(1)
 
     cfg = Settings(env)
 

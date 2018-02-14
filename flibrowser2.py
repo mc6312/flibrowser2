@@ -707,27 +707,30 @@ class MainWnd():
 
 
 def main():
-    env = Environment()
-    cfg = Settings(env)
-
-    cfg.load()
     try:
-        #inpxFileName = cfg.get_param(cfg.IMPORT_INPX_INDEX)
-        #genreNamesFile = cfg.get_param(cfg.GENRE_NAMES_PATH)
+        env = Environment()
+        cfg = Settings(env)
 
-        dbexists = os.path.exists(env.libraryFilePath)
-        lib = LibraryDB(env.libraryFilePath)
-        lib.connect()
+        cfg.load()
         try:
-            if not dbexists:
-                lib.init_tables()
+            #inpxFileName = cfg.get_param(cfg.IMPORT_INPX_INDEX)
+            #genreNamesFile = cfg.get_param(cfg.GENRE_NAMES_PATH)
 
-            mainwnd = MainWnd(lib, env, cfg)
-            mainwnd.main()
+            dbexists = os.path.exists(env.libraryFilePath)
+            lib = LibraryDB(env.libraryFilePath)
+            lib.connect()
+            try:
+                if not dbexists:
+                    lib.init_tables()
+
+                mainwnd = MainWnd(lib, env, cfg)
+                mainwnd.main()
+            finally:
+                lib.disconnect()
         finally:
-            lib.disconnect()
-    finally:
-        cfg.unload()
+            cfg.unload()
+    except Exception as ex:
+        msg_dialog(None, '%s: ошибка' % TITLE, str(ex), Gtk.MessageType.ERROR)
 
     return 0
 
