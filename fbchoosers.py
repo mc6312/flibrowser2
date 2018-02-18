@@ -34,6 +34,7 @@ class FilterChooser():
     """Базовый класс для обёртки над виджетами фильтрации"""
 
     LABEL = ''
+    RANDOM = False
 
     def __init__(self, lib, onchoosed):
         """Инициализация.
@@ -49,6 +50,10 @@ class FilterChooser():
 
         Поля:
         LABEL       - строка для отображения в UI,
+        RANDOM      - может ли использоваться для случайного выбора:
+                      если False, то метод random_choice вызываться
+                      не должен (или должен содержать заглушку,
+                      ничего не делающую),
         box         - виджет, доступный "снаружи" для вставки в UI,
         selectedId  - primary key выбранной сущности;
                       значение присваивается из потрохов класса-потомка."""
@@ -68,9 +73,11 @@ class FilterChooser():
 
     def random_choice(self):
         """Случайный выбор элемента списка.
-        Метод ДОЛЖЕН быть перекрыт классом-потомком."""
+        Метод ДОЛЖЕН быть перекрыт классом-потомком,
+        если поле RANDOM == True."""
 
-        raise NotImplementedError('%s.random_choice() must be implemented' % self.__class__.__name__)
+        if self.RANDOM:
+            raise NotImplementedError('%s.random_choice() must be implemented' % self.__class__.__name__)
 
     def update(self):
         """Обновление содержимого виджетов из БД (self.lib).
@@ -87,6 +94,8 @@ class AlphaListChooser(FilterChooser):
     в первом из которых - алфавитный список,
     во втором - список имён (например, первые буквы имён авторов
     и имена авторов)."""
+
+    RANDOM = True
 
     # эти поля должны быть перекрыты в классе-потомке!
     ALPHATABLENAME      = None # имя таблицы в БД для списка имён
@@ -272,3 +281,25 @@ class SeriesAlphaListChooser(AlphaListChooser):
     EMPTYALPHATEXT = '<>'               # значение, отображаемое в alphalist, если alpha==''
 
     ENTRYLABEL = 'Название:'
+
+
+class SearchFilterChooser(FilterChooser):
+    """Фильтр поиска по произвольному тексту
+    в нескольких полях."""
+
+    LABEL = 'Поиск'
+    RANDOM = False
+
+    def __init__(self, lib, onchoosed):
+        """Инициализация."""
+
+        super().__init__(lib, onchoosed)
+
+        self.box = LabeledGrid()
+
+        self.box.append_row('Доделай меня!')
+
+    def update(self):
+        """Обновление содержимого виджетов из БД (self.lib)."""
+
+        pass

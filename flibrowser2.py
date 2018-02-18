@@ -129,6 +129,9 @@ class MainWnd():
         self.bookListUpdateColValue = serid
         self.update_books()
 
+    def update_books_by_search(self, nid):
+        print('update_books_by_search() not implemented!')
+
     def __create_ui(self):
         self.windowMaximized = False
         self.windowStateLoaded = False
@@ -264,13 +267,21 @@ class MainWnd():
         fr.add(self.chooserpages)
         fl.set_mnemonic_widget(self.chooserpages)
 
+        # все "выбиральники"
         self.choosers = []
+        # только те, которые можно использовать для случайного выбора
+        self.rndchoosers = []
 
-        for chooserclass, handler in ((AuthorAlphaListChooser, self.update_books_by_authorid),
-            (SeriesAlphaListChooser, self.update_books_by_serid)):
+        for chooserclass, handler in (
+            (AuthorAlphaListChooser, self.update_books_by_authorid),
+            (SeriesAlphaListChooser, self.update_books_by_serid),
+            (SearchFilterChooser, self.update_books_by_search)):
 
             chooser = chooserclass(self.lib, handler)
+
             self.choosers.append(chooser)
+            if chooser.RANDOM:
+                self.rndchoosers.append(chooser)
 
             box = Gtk.VBox() # костыль для пустой рамки вокруг дочернего контейнера
             box.set_border_width(WIDGET_SPACING)
@@ -498,7 +509,7 @@ class MainWnd():
 
         # сначала выбираем случайный выбиральник
 
-        npage = randrange(len(self.choosers))
+        npage = randrange(len(self.rndchoosers))
         self.chooserpages.set_current_page(npage)
 
         # выбираем случайный элемент в выбиральнике
@@ -731,6 +742,7 @@ def main():
             cfg.unload()
     except Exception as ex:
         msg_dialog(None, '%s: ошибка' % TITLE, str(ex), Gtk.MessageType.ERROR)
+        raise ex
 
     return 0
 
