@@ -30,6 +30,10 @@ import datetime
 DB_DATE_FORMAT = '%Y-%m-%d'
 
 
+def sqlite_ulower(s):
+    return s.lower()
+
+
 class Database():
     """Тупая обёртка над sqlite3.Connection.
 
@@ -53,10 +57,18 @@ class Database():
         self.vacuumOnInit = False # потом когда-нито будет меняться из настроек, если понадобится
 
     def connect(self):
-        """Соединение с БД"""
+        """Соединение с БД.
+
+        В нём применён не шибко быстрый костыль для регистронезависимого
+        сравнения строковых значений в SELECT'ах.
+        Т.е. в запросах д.б. "WHERE ulower(field)=value"
+        и value тоже должно быть приведено к нижнему регистру"""
+
         if self.connection is None:
             self.connection = sqlite3.connect(self.dbfilename)
             self.cursor = self.connection.cursor()
+
+            self.connection.create_function('ulower', 1, sqlite_ulower)
 
     def disconnect(self):
         """Завершение соединения с БД.

@@ -110,8 +110,8 @@ class Environment():
         # (точнее, self.configFilePath уже известен)
         self.libraryFilePath = os.path.join(self.dataDir, self.LIBRARY_FILE_NAME)
 
-        print('''configuration DB path: %s
-main DB path: %s''' % (self.configFilePath, self.libraryFilePath))
+        print('''файл БД настроек:   %s
+файл БД библиотеки: %s''' % (self.configFilePath, self.libraryFilePath))
 
     def __str__(self):
         """Отображение для отладки"""

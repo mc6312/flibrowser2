@@ -45,8 +45,12 @@ from random import randrange
 class MainWnd():
     """Основное междумордие"""
 
-    COL_BOOK_ID, COL_BOOK_TITLE, COL_BOOK_SERNO, COL_BOOK_SERIES, \
-    COL_BOOK_DATE, COL_BOOK_TOOLTIP, COL_BOOK_AGEICON = range(7)
+    # индексы столбцов в Gtk.ListStore списка книг
+    COL_BOOK_ID, COL_BOOK_AUTHOR, COL_BOOK_TITLE, \
+    COL_BOOK_SERNO, COL_BOOK_SERIES, \
+    COL_BOOK_DATE, COL_BOOK_AGEICON = range(7)
+
+    CPAGE_AUTHORS, CPAGE_SERIES, CPAGE_SEARCH = range(3)
 
     def destroy(self, widget, data=None):
         Gtk.main_quit()
@@ -118,19 +122,6 @@ class MainWnd():
     def task_progress(self, fraction):
         self.progressbar.set_fraction(fraction)
         self.task_events()
-
-    def update_books_by_authorid(self, authorid):
-        self.bookListUpdateColName = 'authorid'
-        self.bookListUpdateColValue = authorid
-        self.update_books()
-
-    def update_books_by_serid(self, serid):
-        self.bookListUpdateColName = 'serid'
-        self.bookListUpdateColValue = serid
-        self.update_books()
-
-    def update_books_by_search(self, nid):
-        print('update_books_by_search() not implemented!')
 
     def __create_ui(self):
         self.windowMaximized = False
@@ -206,6 +197,9 @@ class MainWnd():
                 # 'document-save-symbolic'
                 ('fileExtractBooks', Gtk.STOCK_SAVE, 'Извлечь книги',
                     '<Control>e', 'Извлечь выбранные книги из библиотеки', lambda b: self.extract_books()),
+                #
+                ('fileSearchBooks', Gtk.STOCK_FIND, 'Искать книги',
+                    '<Control>f', 'Искать книги в библиотеке', lambda b: self.search_books()),
                 # 'preferences-system-symbolic'
                 ('fileSettings', Gtk.STOCK_PREFERENCES, 'Настройка',
                     None, 'Настройка программы', lambda b: self.change_settings()),
@@ -219,6 +213,7 @@ class MainWnd():
         uimgr.add_ui_from_string(u'''<ui><menubar>
             <menu name="mnuFile" action="file">
                 <menuitem name="mnuFileAbout" action="fileAbout"/>
+                <menuitem name="mnuFileSearchBooks" action="fileSearchBooks"/>
                 <menuitem name="mnuFileRandomChoice" action="fileRandomChoice"/>
                 <menuitem name="mnuFileExtractBooks" action="fileExtractBooks"/>
                 <separator/>
@@ -237,6 +232,7 @@ class MainWnd():
         self.window.add_accel_group(uimgr.get_accel_group())
 
         self.mnuitemExtractBooks = uimgr.get_widget('/ui/menubar/mnuFile/mnuFileExtractBooks')
+        self.mnuitemSearchBooks = uimgr.get_widget('/ui/menubar/mnuFile/mnuFileSearchBooks')
 
         #
         # морда будет из двух вертикальных панелей
@@ -252,11 +248,14 @@ class MainWnd():
         # ибо alphachooser будет дёргать MainWnd.update_books_*,
         # и на момент вызова поле MainWnd.booklist уже должно существовать
 
+        # символы для мнемоник быстрого перехода к виджетам (Alt+N)
+        fastlabel = iter('123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+
         #
         # в левой панели - алфавитные списки авторов и циклов
         #
 
-        fr, fl = create_labeled_frame('_1. Выбор')
+        fr, fl = create_labeled_frame('Выбор')
         self.roothpaned.pack1(fr, True, False)
 
         self.chooserpages = Gtk.Notebook()
@@ -272,22 +271,23 @@ class MainWnd():
         # только те, которые можно использовать для случайного выбора
         self.rndchoosers = []
 
-        for chooserclass, handler in (
-            (AuthorAlphaListChooser, self.update_books_by_authorid),
-            (SeriesAlphaListChooser, self.update_books_by_serid),
-            (SearchFilterChooser, self.update_books_by_search)):
+        __chsrs = (AuthorAlphaListChooser,
+            SeriesAlphaListChooser,
+            SearchFilterChooser)
 
-            chooser = chooserclass(self.lib, handler)
+        for chooserclass in __chsrs:
+            chooser = chooserclass(self.lib, self.update_books)
 
             self.choosers.append(chooser)
             if chooser.RANDOM:
                 self.rndchoosers.append(chooser)
 
-            box = Gtk.VBox() # костыль для пустой рамки вокруг дочернего контейнера
-            box.set_border_width(WIDGET_SPACING)
-            box.pack_start(chooser.box, True, True, 0)
-            self.chooserpages.append_page(box, Gtk.Label(chooserclass.LABEL))
+            lab = Gtk.Label('_%s: %s' % (fastlabel.__next__(), chooserclass.LABEL))
+            lab.set_use_underline(True)
 
+            self.chooserpages.append_page(chooser.box, lab)
+
+        self.curChooser = None
         self.chooserpages.connect('switch-page', self.chooser_page_switched)
 
         #
@@ -295,7 +295,7 @@ class MainWnd():
         #
 
         self.bookcount = Gtk.Label('0')
-        bookframe, bl = create_labeled_frame('_2. Книги:', self.bookcount)
+        bookframe, bl = create_labeled_frame('_%s. Книги:' % fastlabel.__next__(), self.bookcount)
         self.roothpaned.pack2(bookframe, True, False)
 
         bpanel = Gtk.VBox(spacing=WIDGET_SPACING)
@@ -308,13 +308,14 @@ class MainWnd():
         # список книг
         self.booklist = TreeViewer(
             (GObject.TYPE_INT,      # bookid
+                GObject.TYPE_STRING,# author
                 GObject.TYPE_STRING,# title
                 GObject.TYPE_STRING,# series
                 GObject.TYPE_STRING,# serno
                 GObject.TYPE_STRING,# date
-                GObject.TYPE_STRING,# COL_BOOK_TOOLTIP - подсказка для столбца с названием книги
                 Pixbuf),            # иконка "свежести" книги
-            (TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True, tooltip=self.COL_BOOK_TOOLTIP),
+            (TreeViewer.ColDef(self.COL_BOOK_AUTHOR, 'Автор', False, True, tooltip=self.COL_BOOK_AUTHOR),
+                TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True, tooltip=self.COL_BOOK_TITLE),
                 TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
                 TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True),
                 (TreeViewer.ColDef(self.COL_BOOK_AGEICON, 'Дата', tooltip=self.COL_BOOK_SERIES),
@@ -345,7 +346,7 @@ class MainWnd():
         #
 
         self.selbookcount = Gtk.Label('0')
-        extractframe, efl = create_labeled_frame('_3. Выбрано книг:')
+        extractframe, efl = create_labeled_frame('_%s. Выбрано книг:' % fastlabel.__next__())
 
         xfbox = Gtk.HBox(spacing=WIDGET_SPACING)
         xfbox.set_border_width(WIDGET_SPACING)
@@ -518,7 +519,9 @@ class MainWnd():
             self.booklist.random_choice()
 
     def chooser_page_switched(self, nbook, page, pagenum):
-        self.choosers[pagenum].do_on_choosed()
+        self.curChooser = self.choosers[pagenum]
+        self.curChooser.do_on_choosed()
+        self.mnuitemSearchBooks.set_sensitive(pagenum == self.CPAGE_SEARCH)
 
     def roothpaned_moved(self, paned, data=None):
         pp = paned.get_position()
@@ -615,6 +618,13 @@ class MainWnd():
         else:
             return r[0]
 
+    def search_books(self):
+        """Поиск книг по нескольким полям."""
+
+        # пока - грязный хак:
+        print('Внимание! %s.search_books() реализовано криво!' % self.__class__.__name__)
+        self.choosers[self.CPAGE_SEARCH].do_search()
+
     def update_books(self):
         """Обновление списка книг.
 
@@ -631,19 +641,18 @@ class MainWnd():
         stotalbooks = '%d' % ntotalbooks
         nbooks = 0
 
-        UB_COL_BOOKID, UB_COL_TITLE, UB_COL_SERNO, UB_COL_SERNAME, UB_COL_DATE,\
-        UB_COL_AUTHORNAME = range(6)
-
-        if self.bookListUpdateColValue is not None:
+        if self.curChooser.selectWhere is not None:
             # получаем список книг
-            q = '''SELECT bookid,books.title,serno,seriesnames.title,date,authornames.name
+            q = '''SELECT books.bookid,books.title,serno,seriesnames.title,date,authornames.name
                 FROM books
                 INNER JOIN seriesnames ON seriesnames.serid=books.serid
                 INNER JOIN authornames ON authornames.authorid=books.authorid
-                WHERE books.%s=?
-                ORDER BY seriesnames.title, serno, books.title, date;''' % self.bookListUpdateColName
+                WHERE %s
+                ORDER BY seriesnames.title, serno, books.title, date;'''\
+                % self.curChooser.selectWhere
+
             #print(q)
-            cur = self.lib.cursor.execute(q, (self.bookListUpdateColValue,))
+            cur = self.lib.cursor.execute(q)
 
             # для фильтрации по дате можно сделать втык в запрос подобного:
             #  and (date > "2014-01-01") and (date < "2016-12-31")
@@ -657,37 +666,33 @@ class MainWnd():
 
                 nbooks += 1
 
-                bookid = r[UB_COL_BOOKID]
+                # 0:bookid 1:title 2:serno 3:sername 4:date 5:authorname
+                flds = filterfields(r[0], r[1], r[2], r[3],
+                    # подразумеваятся, что в соотв. поле БД точно есть хоть какая-то дата
+                    datetime.datetime.strptime(r[4], DB_DATE_FORMAT),
+                    r[5])
 
-                # поля, которые могут потребовать доп. телодвижений
-                title = r[UB_COL_TITLE]
-                seriestitle = r[UB_COL_SERNAME]
+                #
+                # дальше работаем ТОЛЬКО с полями flds, про список r забываем
+                #
 
-                # подразумеваятся, что в соотв. поле БД точно есть хоть какая-то дата
-                date = datetime.datetime.strptime(r[UB_COL_DATE], DB_DATE_FORMAT)
-                # тут, возможно, будет код для показа соответствия "дата - цвет 'свежести' книги"
-                # и/или фильтрация по дате
-
-                dateicon = self.bookageicons.get_book_age_icon(datenow, date)
-                datestr = date.strftime(DISPLAY_DATE_FORMAT)
-
-                # дополнительная фильтрация вручную, т.к. sqlite3 "из коробки"
-                # не умеет в collation, и вообще что-то проще сделать не через запросы SQL
-
+                #
+                # дополнительная фильтрация
+                #
                 if self.booklistTitlePattern:
-                    if title.lower().find(self.booklistTitlePattern) < 0 \
-                        and seriestitle.lower().find(self.booklistTitlePattern) < 0:
+                    if flds.title.lower().find(self.booklistTitlePattern) < 0 \
+                        and flds.sertitle.lower().find(self.booklistTitlePattern) < 0:
                         continue
 
-                serno = r[UB_COL_SERNO]
+                dateicon = self.bookageicons.get_book_age_icon(datenow, flds.date)
+                datestr = flds.date.strftime(DISPLAY_DATE_FORMAT)
 
-                self.booklist.store.append((bookid,
-                    title, # books.title
-                    str(serno) if serno > 0 else '', # serno
-                    seriestitle, # seriesnames.title
+                self.booklist.store.append((flds.bookid,
+                    flds.authorname, # authornames.name
+                    flds.title, # books.title
+                    str(flds.serno) if flds.serno > 0 else '', # serno
+                    flds.sertitle, # seriesnames.title
                     datestr, # date
-                    '%s.\n<b>"%s".</b>' % (GLib.markup_escape_text(r[UB_COL_AUTHORNAME], -1),
-                        GLib.markup_escape_text(title, -1)),
                     dateicon
                     ))
 
@@ -729,6 +734,7 @@ def main():
 
             dbexists = os.path.exists(env.libraryFilePath)
             lib = LibraryDB(env.libraryFilePath)
+            print('соединение с БД')
             lib.connect()
             try:
                 if not dbexists:

@@ -397,7 +397,9 @@ class LabeledGrid(Gtk.Grid):
     def append_col(self, widget, expand=False, cols=1, rows=1):
         """Добавляет widget в столбец справа от текущего"""
 
-        widget.props.hexpand = expand
+        #widget.props.hexpand = expand
+        widget.set_hexpand(expand)
+
         self.attach_next_to(widget, self.curcol, Gtk.PositionType.RIGHT, cols, rows)
         self.curcol = widget
 

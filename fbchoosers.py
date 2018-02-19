@@ -29,6 +29,19 @@ from gi.repository.GdkPixbuf import Pixbuf
 
 from random import randrange
 
+from collections import namedtuple
+
+
+filterfields = namedtuple('filterfields', 'bookid title serno sertitle date authorname')
+"""bookid   целое; идентификатор книги, primary key в таблице books
+title       строка; название книги
+serno       целое; номер в цикле/сериале
+sertitle    строка; название цикла или сериала
+date        datetime.date; дата добавления книги в библиотеку
+authorname  строка; имя автора (авторов)."""
+
+FILTER_FIELD_BOOKID, FILTER_FIELD_TITLE, FILTER_FIELD_SERNO, \
+    FILTER_FIELD_SERTITLE, FILTER_FIELD_DATE, FILTER_FIELD_AUTHORNAME = range(6)
 
 class FilterChooser():
     """Базовый класс для обёртки над виджетами фильтрации"""
@@ -43,10 +56,11 @@ class FilterChooser():
 
         Параметры:
         lib         - экземпляр fblib.LibraryDB,
-        onchoosed   - функция или метод, обрабатывающие событие
-                      "выбран элемент в списке";
-                      функция должна принимать один параметр -
-                      значение primary key выбранной сущности.
+        onchoosed   - функция или метод без параметров, обрабатывающие
+                      событие "выбран элемент в списке";
+                      функцияя должна заполнить список книг,
+                      используя chooser.selectWhere и вызывая
+                      chooser.filter_books().
 
         Поля:
         LABEL       - строка для отображения в UI,
@@ -54,22 +68,35 @@ class FilterChooser():
                       если False, то метод random_choice вызываться
                       не должен (или должен содержать заглушку,
                       ничего не делающую),
-        box         - виджет, доступный "снаружи" для вставки в UI,
-        selectedId  - primary key выбранной сущности;
-                      значение присваивается из потрохов класса-потомка."""
+        box         - экземпляр Gtk.VBox, доступный "снаружи" для вставки
+                      в UI; все виджеты chooser'а должны быть вложены
+                      в него;
+        selectWhere - строка параметров, подставляемых в SQL-запрос
+                      после WHERE в flibrowser2.update_books();
+                      значение присваивается из потрохов класса-потомка;
+                      может быть None, если в chooser'е ничего не выбрано
+                      и список книг должен быть пуст."""
 
         if not callable(onchoosed):
             raise ValueError('%s.__init__(): onchoose is not callable' % self.__class__.__name__)
 
         self.lib = lib
         self.onchoosed = onchoosed
-        self.box = None
-        self.selectedId = None
+
+        self.box = Gtk.VBox(spacing=WIDGET_SPACING)
+        self.box.set_border_width(WIDGET_SPACING)
+        # бордюр - потому что снаружи это будет всунуто в виде страницы в Gtk.Notebook
+
+        self.selectWhere = None
 
     def do_on_choosed(self):
-        """Вызов self.onchoosed "снаружи"."""
+        """Вызов self.onchoosed "снаружи".
+        Вызывается в т.ч. при активации виджета
+        выбора. Если немедленное обновление
+        списка книг в основном окне не нужно,
+        этот метод должен быть перекрыт заглушкой."""
 
-        self.onchoosed(self.selectedId)
+        self.onchoosed()
 
     def random_choice(self):
         """Случайный выбор элемента списка.
@@ -123,9 +150,6 @@ class AlphaListChooser(FilterChooser):
 
         # строка для фильтрации self.namelist
         self.namePattern = ''
-
-        #
-        self.box = Gtk.VBox(spacing=WIDGET_SPACING)
 
         hbox = Gtk.HBox(spacing=WIDGET_SPACING)
         self.box.pack_start(hbox, True, True, 0)
@@ -237,9 +261,9 @@ class AlphaListChooser(FilterChooser):
         rows = self.namelist.selection.get_selected_rows()[1]
 
         if rows:
-            self.selectedId = self.namelist.store.get_value(self.namelist.store.get_iter(rows[0]), self.COL_NAME_ID)
+            self.selectWhere = 'books.%s=%s' % (self.COLNAMEID, self.namelist.store.get_value(self.namelist.store.get_iter(rows[0]), self.COL_NAME_ID))
         else:
-            self.selectedId = None
+            self.selectedWhere = None
 
         self.do_on_choosed()
 
@@ -290,16 +314,160 @@ class SearchFilterChooser(FilterChooser):
     LABEL = 'Поиск'
     RANDOM = False
 
+    # индексы self.entries
+    FLD_AUTHORNAME, FLD_BOOKTITLE, FLD_SERTITLE, FLD_BOOKID = range(4)
+
+    # соответствие полей filterfields и self.values
+    FLDMAP = {FLD_AUTHORNAME:FILTER_FIELD_AUTHORNAME,
+        FLD_BOOKTITLE:FILTER_FIELD_AUTHORNAME,
+        FLD_SERTITLE:FILTER_FIELD_SERTITLE,
+        FLD_BOOKID:FILTER_FIELD_BOOKID}
+
+    class SearchFilterStrEntry():
+        def __init__(self, entry, colname, onchange):
+            """Класс-обёртка для Gtk.Entry.
+
+            entry       - экземпляр Gtk.Entry,
+            colname     - имя столбца в БД,
+            onchange    - функция, вызываемая после изменения содержимого."""
+
+            self.entry = entry
+            self.entry.connect('changed', self.entry_changed)
+
+            self.colname = colname
+
+            self.value = None
+
+            self.onchange = onchange
+
+        def clear(self):
+            self.entry.set_text('')
+
+        def entry_changed(self, entry):
+            """Содержимое поля ввода изменилось."""
+
+            self.value = self.validate_value(entry.get_text().strip())
+            self.onchange()
+
+        def validate_value(self, s):
+            """Преобразование строки s в необходимый тип и проверка
+            значения. В случае неправильного значения возвращает None,
+            иначе возвращает значение.
+            Для регистронезависимого сравнения строковых значений
+            прикручен не шибко быстрый костыль в виде функции
+            ulower() - см. в модуле fbdb, и соотв. её вызова
+            при генерации куска запроса в get_where_param().
+            Для полей с нестроковыми значениями метод должен быть
+            перекрыт классом-потомком."""
+
+            return s.lower()
+
+        def get_where_param(self):
+            """Возвращает параметр для WHERE-части SQL-запроса,
+            или пустую строку, если self.value==None.
+
+            Метод должен быть перекрыт классом-потомком для
+            нестроковых значений."""
+
+            if not self.value:
+                return ''
+
+            #v.lower()
+            return 'ulower(%s) LIKE "%%%s%%"' % (self.colname, self.value)
+
+    class SearchFilterIntEntry(SearchFilterStrEntry):
+        def validate_value(self, s):
+            try:
+                v = int(s)
+                if v <= 0:
+                    return None
+                else:
+                    return v
+            except ValueError:
+                return None
+
+        def get_where_param(self):
+            return '' if not self.value else '%s=%d' % (self.colname, self.value)
+
+    FLD_DEFS = (('Имя автора', 'authornames.name', -1, True, SearchFilterStrEntry),
+        ('Название книги', 'books.title', -1, True, SearchFilterStrEntry),
+        ('Название цикла/сериала', 'seriesnames.title', -1, True, SearchFilterStrEntry),
+        ('Id книги', 'books.bookid', 8, False, SearchFilterIntEntry))
+
     def __init__(self, lib, onchoosed):
         """Инициализация."""
 
         super().__init__(lib, onchoosed)
 
-        self.box = LabeledGrid()
+        grid = LabeledGrid()
+        self.box.pack_start(grid, False, False, 0)
 
-        self.box.append_row('Доделай меня!')
+        self.entries = []
+
+        for eix, (labtxt, colname,  cwidth, eexpand, eclass) in enumerate(self.FLD_DEFS):
+            grid.append_row('%s:' % labtxt)
+
+            entry = eclass(Gtk.Entry(), colname, self.values_changed)
+            if cwidth > 0:
+                entry.entry.set_max_width_chars(cwidth)
+                entry.entry.set_max_length(cwidth)
+
+            self.entries.append(entry)
+            grid.append_col(entry.entry, expand=eexpand)
+
+        hbox = Gtk.HBox(spacing=WIDGET_SPACING)
+
+        btnreset = Gtk.Button('Очистить')
+        btnreset.connect('clicked', lambda b: self.reset_entries())
+        hbox.pack_start(btnreset, False, False, 0)
+
+        self.btnfind = Gtk.Button('Искать')
+        self.btnfind.set_sensitive(False) # потом включится, после ввода значений
+        self.btnfind.connect('clicked', lambda b: self.do_search())
+        hbox.pack_end(self.btnfind, False, False, 0)
+
+        self.box.pack_start(hbox, False, False, 0)
+
+    def do_search(self):
+        """Создаём параметр для запроса и пинаем главное окно"""
+
+        # формируем параметры запроса
+        where = []
+
+        for entry in self.entries:
+            v = entry.get_where_param()
+            if v:
+                where.append(v)
+
+        self.selectWhere = ' AND '.join(where)
+        #print(self.selectWhere)
+
+        self.onchoosed()
+
+    def reset_entries(self):
+        for entry in self.entries:
+            entry.clear()
+
+    def values_changed(self):
+        n = len(self.entries)
+
+        for entry in self.entries:
+            if not entry.value:
+                n -= 1
+
+        self.btnfind.set_sensitive(n > 0) # хоть одно непустое значение
 
     def update(self):
-        """Обновление содержимого виджетов из БД (self.lib)."""
+        """Обновление содержимого виджетов из БД (self.lib).
 
-        pass
+        SearchFilterChooser этого не требует."""
+
+        return
+
+    def do_on_choosed(self):
+        """Не нужен, ибо список книг должен обновляться только
+        по кнопке на панели поиска.
+
+        А кнопка сама вызовет self.onchoosed."""
+
+        return
