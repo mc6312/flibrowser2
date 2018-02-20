@@ -29,7 +29,7 @@ backup:
 update:
 	$(packer) x -y $(backupdir)$(srcarcname)
 commit:
-	git commit -a -m "$(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')"
+	git commit -a -uno -m "$(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')"
 	# не, push вручную, ибо ваистену
 	#git push
 docview:
