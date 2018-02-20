@@ -31,6 +31,8 @@ from random import randrange
 
 from collections import namedtuple
 
+from fbdb import DB_DATE_FORMAT
+
 
 filterfields = namedtuple('filterfields', 'bookid title serno sertitle date authorname')
 """bookid   целое; идентификатор книги, primary key в таблице books
@@ -75,7 +77,13 @@ class FilterChooser():
                       после WHERE в flibrowser2.update_books();
                       значение присваивается из потрохов класса-потомка;
                       может быть None, если в chooser'е ничего не выбрано
-                      и список книг должен быть пуст."""
+                      и список книг должен быть пуст;
+        firstWidget - None или экземпляр класса Gtk.Widget, который должен
+                      получить фокус ввода при активации chooser'а;
+        defaultWidget - None или экземпляр класса Gtk.Widget;
+                      используется основным окном программы для вызовов
+                      window.set_default() при активации/деактивации
+                      панели chooser'а."""
 
         if not callable(onchoosed):
             raise ValueError('%s.__init__(): onchoose is not callable' % self.__class__.__name__)
@@ -88,6 +96,8 @@ class FilterChooser():
         # бордюр - потому что снаружи это будет всунуто в виде страницы в Gtk.Notebook
 
         self.selectWhere = None
+        self.defaultWidget = None
+        self.firstWidget = None
 
     def do_on_choosed(self):
         """Вызов self.onchoosed "снаружи".
@@ -186,6 +196,8 @@ class AlphaListChooser(FilterChooser):
 
         entry = create_labeled_entry(hpanel, self.ENTRYLABEL, self.nameentry_changed, True)
         entry_setup_clear_icon(entry)
+
+        self.firstWidget = self.alphalist.view
 
         #self.update_alphalist() #?
 
@@ -404,17 +416,35 @@ class SearchFilterChooser(FilterChooser):
 
         self.entries = []
 
+        self.datefrom = None
+        self.dateto = None
+
+        #
+        # поля ввода имени автора, названия книги и т.п.
+        #
         for eix, (labtxt, colname,  cwidth, eexpand, eclass) in enumerate(self.FLD_DEFS):
             grid.append_row('%s:' % labtxt)
 
             entry = eclass(Gtk.Entry(), colname, self.values_changed)
+
+            entry_setup_clear_icon(entry.entry)
+            entry.entry.set_activates_default(True)
+
             if cwidth > 0:
                 entry.entry.set_max_width_chars(cwidth)
+                entry.entry.set_width_chars(cwidth)
                 entry.entry.set_max_length(cwidth)
 
             self.entries.append(entry)
             grid.append_col(entry.entry, expand=eexpand)
 
+        self.firstWidget = self.entries[0].entry
+
+        #
+        # кнопки (создаём заранее, т.к. кнопка "искать" должна уже
+        # существовать на момент создания полей даты (ибо её дергает
+        # обработчик событий изменения даты)
+        #
         hbox = Gtk.HBox(spacing=WIDGET_SPACING)
 
         btnreset = Gtk.Button('Очистить')
@@ -423,10 +453,38 @@ class SearchFilterChooser(FilterChooser):
 
         self.btnfind = Gtk.Button('Искать')
         self.btnfind.set_sensitive(False) # потом включится, после ввода значений
+        self.btnfind.set_can_default(True)
         self.btnfind.connect('clicked', lambda b: self.do_search())
+
         hbox.pack_end(self.btnfind, False, False, 0)
 
-        self.box.pack_start(hbox, False, False, 0)
+        self.defaultWidget = self.btnfind
+
+        self.box.pack_end(hbox, False, False, 0)
+        self.box.pack_end(Gtk.HSeparator(), False, False, 0)
+
+        #
+        # выбор даты от/до
+        #
+        grid.append_row('Дата:')
+
+        datehbox = Gtk.VBox(spacing=WIDGET_SPACING)
+
+        self.datefromchooser = DateChooser('не старше', ondatechanged=self.datefrom_changed)
+        datehbox.pack_start(self.datefromchooser.container, False, False, 0)
+
+        self.datetochooser = DateChooser('не новее', ondatechanged=self.dateto_changed)
+        datehbox.pack_start(self.datetochooser.container, False, False, 0)
+
+        grid.append_col(datehbox, True)
+
+    def datefrom_changed(self, date):
+        self.datefrom = date
+        self.values_changed()
+
+    def dateto_changed(self, date):
+        self.dateto = date
+        self.values_changed()
 
     def do_search(self):
         """Создаём параметр для запроса и пинаем главное окно"""
@@ -434,11 +492,31 @@ class SearchFilterChooser(FilterChooser):
         # формируем параметры запроса
         where = []
 
+        # для полей "имя автора" и подобных
         for entry in self.entries:
             v = entry.get_where_param()
             if v:
                 where.append(v)
 
+        # для полей даты от/до
+        datefromoper = '>='
+        datetooper = '<='
+
+        if self.datefrom is not None and self.dateto is not None:
+            if self.datefrom > self.dateto:
+                # чтоб не вводить лишние проверки при обработке событий гуЯ
+                # когда введены даты не в том порядке
+                datefromoper = '<='
+                datetooper = '>='
+
+        def __add_date(date, cmpoper):
+            if date is not None:
+                where.append('date %s "%s"' % (cmpoper, date.strftime(DB_DATE_FORMAT)))
+
+        __add_date(self.datefrom, datefromoper)
+        __add_date(self.dateto, datetooper)
+
+        # формируем параметры запроса
         self.selectWhere = ' AND '.join(where)
         #print(self.selectWhere)
 
@@ -448,6 +526,9 @@ class SearchFilterChooser(FilterChooser):
         for entry in self.entries:
             entry.clear()
 
+        self.datefromchooser.checkbox.set_active(False)
+        self.datetochooser.checkbox.set_active(False)
+
     def values_changed(self):
         n = len(self.entries)
 
@@ -455,7 +536,18 @@ class SearchFilterChooser(FilterChooser):
             if not entry.value:
                 n -= 1
 
-        self.btnfind.set_sensitive(n > 0) # хоть одно непустое значение
+        if self.datefrom is not None:
+            n += 1
+
+        if self.dateto is not None:
+            n += 1
+
+        ne = n > 0 # хоть одно непустое значение
+
+        self.btnfind.set_sensitive(ne)
+        if ne:
+            # на всякий случай
+            self.btnfind.grab_default()
 
     def update(self):
         """Обновление содержимого виджетов из БД (self.lib).
@@ -471,3 +563,32 @@ class SearchFilterChooser(FilterChooser):
         А кнопка сама вызовет self.onchoosed."""
 
         return
+
+
+if __name__ == '__main__':
+    print('[test]')
+
+    def __onchoosed():
+        print('__onchoosed() called, selectWhere="%s"' % chooser.selectWhere)
+
+    import fbenv
+    import fblib
+
+    env = fbenv.Environment()
+    lib = fblib.LibraryDB(env.libraryFilePath)
+    lib.connect()
+    try:
+        window = Gtk.ApplicationWindow(Gtk.WindowType.TOPLEVEL)
+        window.connect('destroy', lambda w: Gtk.main_quit())
+
+        #window.set_size_request(800, -1)
+
+        chooser = SearchFilterChooser(lib, __onchoosed)
+        window.add(chooser.box)
+        window.set_default(chooser.defaultWidget)
+
+        window.show_all()
+        Gtk.main()
+
+    finally:
+        lib.disconnect()

@@ -33,6 +33,9 @@ import zipfile
 from sys import stderr
 from random import randrange
 from math import pi
+import datetime
+
+from fbcommon import DISPLAY_DATE_FORMAT
 
 # отступы между виджетами, дабы не вырвало от пионерского вида гуя
 
@@ -397,10 +400,13 @@ class LabeledGrid(Gtk.Grid):
     def append_col(self, widget, expand=False, cols=1, rows=1):
         """Добавляет widget в столбец справа от текущего"""
 
-        #widget.props.hexpand = expand
-        widget.set_hexpand(expand)
+        # нужен костыль, ибо иначе Gtk.Grid сделает expand всем виджетам
+        # в столбце, если expand задан хотя бы для одного
+        box = Gtk.HBox(spacing=0)
+        box.pack_start(widget, expand, expand, 0)
+        box.set_hexpand(True)
 
-        self.attach_next_to(widget, self.curcol, Gtk.PositionType.RIGHT, cols, rows)
+        self.attach_next_to(box, self.curcol, Gtk.PositionType.RIGHT, cols, rows)
         self.curcol = widget
 
 
@@ -416,6 +422,129 @@ def entry_setup_clear_icon(entry):
     entry.set_icon_activatable(Gtk.EntryIconPosition.SECONDARY, True)
     entry.set_icon_tooltip_text(Gtk.EntryIconPosition.SECONDARY, 'Очистить')
     entry.connect('icon-press', __clear_entry_by_icon)
+
+
+def set_widget_style(widget, css):
+    """Задание стиля для виджета widget в формате CSS"""
+
+    dbsp = Gtk.CssProvider()
+    dbsp.load_from_data(css) # убейте гномосексуалистов кто-нибудь!
+    dbsc = widget.get_style_context()
+    dbsc.add_provider(dbsp, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+
+class DateChooserDialog():
+    """Обёртка над Gtk.Dialog и Gtk.Calendar."""
+
+    def __init__(self, parentw, stitle):
+        self.date = datetime.datetime.now().date()
+
+        self.dialog = Gtk.Dialog(stitle,
+            parentw,
+            Gtk.DialogFlags.MODAL|Gtk.DialogFlags.DESTROY_WITH_PARENT)
+        self.dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OK, Gtk.ResponseType.OK)
+
+        self.calendar = Gtk.Calendar()
+
+        self.dialog.get_content_area().pack_start(self.calendar, True, True, 0)
+
+    def run(self):
+        self.dialog.show_all()
+        r = self.dialog.run()
+        self.dialog.hide()
+
+        if r == Gtk.ResponseType.OK:
+            d, m, y = self.calendar.get_date()
+            # вынимание - месяц тут от 0!
+            self.date = datetime.date(d, m + 1, y)
+
+        return r
+
+
+class DateChooser():
+    """Обёртка над Gtk.Calendar, вызываемым с помощью кнопки.
+    Содержит также Gtk.CheckButton, разрешающую изменение даты."""
+
+    def __init__(self, labtxt, oncheckboxtoggled=None, ondatechanged=None):
+        """Инициализация.
+
+        Параметры:
+        labtxt              - текст для CheckButton;
+        oncheckboxtoogled   - None или функция, вызываемая при изменении
+                              состояния checkbox;
+                              получает один булевский параметр -
+                              состояние чекбокса;
+        ondatechanged       - None или функция, получающая один параметр,
+                              экземпляр datetime.date или None;
+                              вызывается:
+                              1. при изменении даты - в этом случае
+                                 функция получает datetime.date,
+                              2. при изменении состояния чекбокса -
+                                 в этом случае функция получает
+                                 datetime.date, если чекбокс включен
+                                 и разрешена кнопка выбора даты,
+                                 или получает None, если чекбокс выключен,
+                                 и кнопка выбора даты блокирована.
+
+        Поля:
+        container           - виджет, содержащий прочие виджеты DateChooser
+                              и добавляемый в UI "снаружи";
+        calendar            - экземпляр Gtk.Calendar;
+        date                - None или datetime.date (изменяется при
+                              выборе в Calendar);
+        checkbox            - экземпляр Gtk.CheckButton."""
+
+        self.date = None
+        self.oncheckboxtoggled = oncheckboxtoggled
+        self.ondatechanged = ondatechanged
+
+        self.container = Gtk.HBox(spacing=WIDGET_SPACING)
+
+        self.checkbox = Gtk.CheckButton.new_with_label(labtxt)
+        self.container.pack_start(self.checkbox, False, False, 0)
+
+        self.dropbtn = Gtk.Button('')
+        self.dropbtn.connect('clicked', lambda b: self.choose_date())
+        self.container.pack_start(self.dropbtn, False, False, 0)
+
+        self.dcdialog = DateChooserDialog(None, labtxt)
+        self.date = self.dcdialog.date
+
+        self.update_display()
+
+        self.checkbox.connect('toggled', self.__checkbox_toggled)
+        self.__checkbox_toggled(self.checkbox)
+
+    def set_sensitive(self, v):
+        self.container.set_sensitive(v)
+
+    def __checkbox_toggled(self, chk, data=None):
+        ca = chk.get_active()
+
+        self.dropbtn.set_sensitive(ca)
+
+        if callable(self.oncheckboxtoggled):
+            self.oncheckboxtoggled(ca)
+
+        self.__date_changed()
+
+    def update_display(self):
+        self.dropbtn.set_label(self.date.strftime(DISPLAY_DATE_FORMAT))
+
+    def __date_changed(self):
+        if callable(self.ondatechanged):
+            self.ondatechanged(self.date if self.dropbtn.get_sensitive() else None)
+
+    def choose_date(self):
+        self.dcdialog.dialog.set_transient_for(self.dropbtn.get_toplevel())
+        # потому как на момент создания DateChooser окна могло еще не быть
+
+        if self.dcdialog.run() == Gtk.ResponseType.OK:
+            self.date = self.dcdialog.date
+            self.update_display()
+
+            self.__date_changed()
 
 
 def get_resource_loader(env):
@@ -501,7 +630,6 @@ class FileResourceLoader():
                 return Gtk.IconTheme.get_default().load_icon(fallback, height, Gtk.IconLookupFlags.FORCE_SIZE)
 
 
-
 class ZipFileResourceLoader(FileResourceLoader):
     """Загрузчик файлов ресурсов из архива ZIP.
     Архив - сам файл flibrowser2 в случае, когда он
@@ -527,6 +655,22 @@ class ZipFileResourceLoader(FileResourceLoader):
 if __name__ == '__main__':
     print('[test]')
 
+    window = Gtk.ApplicationWindow(Gtk.WindowType.TOPLEVEL)
+    window.connect('destroy', lambda w: Gtk.main_quit())
+
+    #window.set_size_request(800, -1)
+
+    def date_is_changed(date):
+        print(date)
+
+    chooser = DateChooser('хрень', ondatechanged=date_is_changed)
+    window.add(chooser.container)
+
+    window.show_all()
+    Gtk.main()
+
+
+    exit(0)
     import fbenv
 
     clrs = BookAgeIcons(Gtk.IconSize.MENU)

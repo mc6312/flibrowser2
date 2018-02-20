@@ -521,7 +521,11 @@ class MainWnd():
     def chooser_page_switched(self, nbook, page, pagenum):
         self.curChooser = self.choosers[pagenum]
         self.curChooser.do_on_choosed()
-        self.mnuitemSearchBooks.set_sensitive(pagenum == self.CPAGE_SEARCH)
+
+        self.window.set_default(self.curChooser.defaultWidget)
+
+        if self.curChooser.firstWidget is not None:
+            self.curChooser.firstWidget.grab_focus()
 
     def roothpaned_moved(self, paned, data=None):
         pp = paned.get_position()
@@ -621,9 +625,7 @@ class MainWnd():
     def search_books(self):
         """Поиск книг по нескольким полям."""
 
-        # пока - грязный хак:
-        print('Внимание! %s.search_books() реализовано криво!' % self.__class__.__name__)
-        self.choosers[self.CPAGE_SEARCH].do_search()
+        self.chooserpages.set_current_page(self.CPAGE_SEARCH)
 
     def update_books(self):
         """Обновление списка книг.
@@ -648,7 +650,7 @@ class MainWnd():
                 INNER JOIN seriesnames ON seriesnames.serid=books.serid
                 INNER JOIN authornames ON authornames.authorid=books.authorid
                 WHERE %s
-                ORDER BY seriesnames.title, serno, books.title, date;'''\
+                ORDER BY authornames.name, seriesnames.title, serno, books.title, date;'''\
                 % self.curChooser.selectWhere
 
             #print(q)
