@@ -168,7 +168,7 @@ class AlphaListChooser(FilterChooser):
         self.alphalist = TreeViewer((GObject.TYPE_STRING, GObject.TYPE_STRING),
             (TreeViewer.ColDef(self.COL_ALPHA_DISPLAY, '', False, True),))
 
-        self.alphalist.window.set_size_request(WIDGET_BASE_UNIT * 3, -1)
+        self.alphalist.window.set_size_request(WIDGET_BASE_UNIT * 6, -1)
 
         self.alphalist.view.set_headers_visible(False)
         self.alphalist.view.set_enable_search(True)
@@ -583,7 +583,9 @@ if __name__ == '__main__':
 
         #window.set_size_request(800, -1)
 
-        chooser = SearchFilterChooser(lib, __onchoosed)
+        chooser = AuthorAlphaListChooser(lib, __onchoosed)
+        chooser.update()
+        #chooser = SearchFilterChooser(lib, __onchoosed)
         window.add(chooser.box)
         window.set_default(chooser.defaultWidget)
 
