@@ -168,7 +168,8 @@ class AlphaListChooser(FilterChooser):
         self.alphalist = TreeViewer((GObject.TYPE_STRING, GObject.TYPE_STRING),
             (TreeViewer.ColDef(self.COL_ALPHA_DISPLAY, '', False, True),))
 
-        self.alphalist.window.set_size_request(WIDGET_BASE_UNIT * 6, -1)
+        #self.alphalist.window.set_size_request(WIDGET_BASE_UNIT * 6, -1)
+        self.alphalist.window.set_min_content_width(WIDGET_BASE_UNIT * 3)
 
         self.alphalist.view.set_headers_visible(False)
         self.alphalist.view.set_enable_search(True)

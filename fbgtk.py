@@ -52,12 +52,19 @@ if WIDGET_SPACING < 4:
 UI_ENCODING = 'utf-8'
 
 
-def create_scwindow():
-    """Создает и возвращает экземпляр Gtk.ScrolledWindow"""
+def create_scwindow(overlay=False):
+    """Создает и возвращает экземпляр Gtk.ScrolledWindow.
+
+    overlay - булевское значение, если True - разрешает модную гномью
+              фичу - скроллбар становится полупрозрачным (фактически
+              виден только при скроллировании);
+              по умочанию - False, ибо нефигЪ."""
 
     scwindow = Gtk.ScrolledWindow()
     scwindow.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
     scwindow.set_shadow_type(Gtk.ShadowType.IN)
+
+    scwindow.set_overlay_scrolling(overlay)
 
     return scwindow
 
