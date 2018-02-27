@@ -49,8 +49,8 @@ class AboutDialog():
             self.windowicon = resldr.pixbuf_from_bytes(logo, LOGO_SIZE, LOGO_SIZE)
 
         except Exception as ex:
-            print('Не удалось загрузить файл изображения "%s" - %s' % (self.ICONNAME, str(ex)))
-            self.windowicon = Gtk.IconTheme.get_default().load_icon('gtk-find', LOGO_SIZE, Gtk.IconLookupFlags.FORCE_SIZE)
+            print('Не удалось загрузить файл изображения "%s" - %s' % (self.ICONNAME, repr(ex)))
+            self.windowicon = load_system_icon('gtk-find', LOGO_SIZE, True)
 
         #self.dlgabout.set_icon(self.windowicon)
 

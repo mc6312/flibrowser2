@@ -32,6 +32,11 @@ import os.path
 
 
 class LibraryDB(Database):
+    TABLE_FAVORITE_AUTHORS = 'favorite_authors'
+    TABLE_FAVORITE_SERIES = 'favorite_series'
+
+    __FAVORITE_FIELDS = 'name TEXT PRIMARY KEY'
+
     TABLES = (# главная таблица - список книг
         ('books', '''bookid INTEGER PRIMARY KEY,
 authorid INTEGER,
@@ -55,7 +60,12 @@ bundleid INTEGER'''),
         # таблица человекочитаемых названий для тэгов
         ('genrenames', '''tag VARCHAR(64), name VARCHAR(128), category VARCHAR(128)'''),
         # таблица имён файлов архивов с книгами
-        ('bundles', '''bundleid INTEGER PRIMARY KEY, filename VARCHAR(256)'''))
+        ('bundles', '''bundleid INTEGER PRIMARY KEY, filename VARCHAR(256)'''),
+        # таблица имён избранных авторов
+        (TABLE_FAVORITE_AUTHORS, __FAVORITE_FIELDS),
+        # таблица названий избранных циклов/сериалов
+        (TABLE_FAVORITE_SERIES, __FAVORITE_FIELDS),
+        )
 
     def get_name_first_letter(self, name):
         """Возвращает первый буквенно-цифровой символ из строки name,
@@ -74,6 +84,18 @@ bundleid INTEGER'''),
 
         # для всех прочих символов
         return '#'
+
+    def add_favorite(self, tablename, favname):
+        """Добавление имени favname в таблицу tablename
+        (TABLE_FAVORITE_*.)."""
+
+        self.cursor.execute('INSERT OR REPLACE INTO %s(name) VALUES (?);' % tablename, (favname,))
+
+    def remove_favorite(self, tablename, favname):
+        """Удаление имени favname из таблицы tablename
+        (TABLE_FAVORITE_*.)."""
+
+        self.cursor.execute('DELETE FROM %s WHERE name=?;' % tablename, (favname,))
 
 
 class StrHashIdDict():

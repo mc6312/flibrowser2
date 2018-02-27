@@ -32,6 +32,7 @@ from random import randrange
 from collections import namedtuple
 
 from fbdb import DB_DATE_FORMAT
+from fblib import LibraryDB
 
 
 filterfields = namedtuple('filterfields', 'bookid title serno sertitle date authorname')
@@ -141,6 +142,8 @@ class AlphaListChooser(FilterChooser):
     COLALPHA            = None # имя столбца с 1й буквой (alpha) в таблицах alphatable и nametable
     COLNAMETEXT         = None # имя столбца с отображаемым текстом в nametable
     EMPTYALPHATEXT      = None # значение, отображаемое в alphalist, если alpha==''
+    FAVORITETABLENAME   = None # имя таблицы в БД со списком избранных имён
+                               # (см. TABLE_FAVORITE_* в fblib.LibraryDB)
 
     ENTRYLABEL = '' # текст метки поля ввода
 
@@ -148,7 +151,7 @@ class AlphaListChooser(FilterChooser):
     COL_ALPHA_VALUE, COL_ALPHA_DISPLAY = range(2)
 
     # столбцы списка имён
-    COL_NAME_ID, COL_NAME_TEXT = range(2)
+    COL_NAME_ID, COL_NAME_FAVORITE, COL_NAME_TEXT = range(3)
 
     def __init__(self, lib, onchoosed):
         """Инициализация объекта и создание виджетов."""
@@ -164,7 +167,9 @@ class AlphaListChooser(FilterChooser):
         hbox = Gtk.HBox(spacing=WIDGET_SPACING)
         self.box.pack_start(hbox, True, True, 0)
 
+        #
         # алфавитный список
+        #
         self.alphalist = TreeViewer((GObject.TYPE_STRING, GObject.TYPE_STRING),
             (TreeViewer.ColDef(self.COL_ALPHA_DISPLAY, '', False, True),))
 
@@ -178,17 +183,23 @@ class AlphaListChooser(FilterChooser):
         self.alphalist.selection.set_mode(Gtk.SelectionMode.SINGLE)
         self.alphalist.selection.connect('changed', self.alphalist_selected)
 
+        #
         # список имён
+        #
         self.namelist = TreeViewer(
             # id, name
-            (GObject.TYPE_INT, GObject.TYPE_STRING),
-            (TreeViewer.ColDef(self.COL_NAME_TEXT, '', False, True),))
+            (GObject.TYPE_INT, Pixbuf, GObject.TYPE_STRING),
+            (TreeViewer.ColDef(self.COL_NAME_FAVORITE, '', False, False),
+             TreeViewer.ColDef(self.COL_NAME_TEXT, '', False, True),)
+            )
+        self.namelist.columns[0].set_min_width(MENU_ICON_SIZE_PIXELS)
 
         self.namelist.view.set_headers_visible(False)
         self.namelist.view.set_enable_search(True)
         self.namelist.view.set_tooltip_column(self.COL_NAME_TEXT)
 
         self.namelist.selection.connect('changed', self.namelist_selected)
+        self.namelist.view.connect('row-activated', self.namelist_clicked)
 
         hbox.pack_end(self.namelist.window, True, True, 0)
 
@@ -232,12 +243,25 @@ class AlphaListChooser(FilterChooser):
         self.namelist.view.set_model(None)
         self.namelist.store.clear()
 
+        F_FAVNAME, F_ID, F_TEXT = range(3)
+
         if self.selectedAlpha is not None:
-            cur = self.lib.cursor.execute('SELECT %s,%s FROM %s WHERE %s="%s" ORDER BY %s;' %\
-                (self.COLNAMEID, self.COLNAMETEXT,
+            favnamecol = '%s.name' % self.FAVORITETABLENAME
+            namecol = '%s.%s' % (self.NAMETABLENAME, self.COLNAMETEXT)
+
+            q = '''SELECT %s,%s,%s
+                FROM %s
+                LEFT JOIN %s ON %s=%s
+                WHERE %s="%s"
+                ORDER BY %s;''' %\
+                (favnamecol, self.COLNAMEID, namecol,
                 self.NAMETABLENAME,
+                self.FAVORITETABLENAME, namecol, favnamecol,
                 self.COLALPHA, self.selectedAlpha,
-                self.COLNAMETEXT))
+                namecol)
+            #print(q)
+
+            cur = self.lib.cursor.execute(q)
 
             while True:
                 r = cur.fetchone()
@@ -247,10 +271,13 @@ class AlphaListChooser(FilterChooser):
                 # фильтрация по начальным буквам имени автора.
                 # вручную, ибо лень прикручивать collation к sqlite3
 
-                if self.namePattern and not r[1].lower().startswith(self.namePattern):
+                if self.namePattern and not r[F_TEXT].lower().startswith(self.namePattern):
                     continue
 
-                self.namelist.store.append((r[0], r[1]))
+                # 2й элемент - Pixbuf, иконка "избранное/неизбранное"
+                self.namelist.store.append((r[F_ID],
+                    iconStarred if r[F_FAVNAME] else None,
+                    r[F_TEXT]))
 
         self.namelist.view.set_model(self.namelist.store)
         self.namelist.view.set_search_column(self.COL_NAME_TEXT)
@@ -267,6 +294,23 @@ class AlphaListChooser(FilterChooser):
         #print('"%s"' % self.selectedAlpha)
 
         self.update_namelist()
+
+    def namelist_clicked(self, view, path, col):
+        col = self.namelist.colmap[col]
+        storeiter = self.namelist.store.get_iter(path)
+
+        if col == self.COL_NAME_FAVORITE:
+            icon, name = self.namelist.store.get(storeiter,
+                self.COL_NAME_FAVORITE, self.COL_NAME_TEXT)
+
+            if icon is None:
+                self.lib.add_favorite(self.FAVORITETABLENAME, name)
+                icon = iconStarred
+            else:
+                self.lib.remove_favorite(self.FAVORITETABLENAME, name)
+                icon = None
+
+            self.namelist.store.set_value(storeiter, self.COL_NAME_FAVORITE, icon)
 
     def namelist_selected(self, sel, data=None):
         """Обработка события выбора элемента(ов) в списке имён"""
@@ -303,6 +347,7 @@ class AuthorAlphaListChooser(AlphaListChooser):
     COLALPHA = 'alpha'                  # имя столбца с 1й буквой (alpha) в таблицах alphatable и nametable
     COLNAMETEXT = 'name'                # имя столбца с отображаемым текстом в nametable
     EMPTYALPHATEXT = '<>'               # значение, отображаемое в alphalist, если alpha==''
+    FAVORITETABLENAME = LibraryDB.TABLE_FAVORITE_AUTHORS
 
     ENTRYLABEL = 'Имя:'
 
@@ -316,6 +361,7 @@ class SeriesAlphaListChooser(AlphaListChooser):
     COLALPHA = 'alpha'                  # имя столбца с 1й буквой (alpha) в таблицах alphatable и nametable
     COLNAMETEXT = 'title'               # имя столбца с отображаемым текстом в nametable
     EMPTYALPHATEXT = '<>'               # значение, отображаемое в alphalist, если alpha==''
+    FAVORITETABLENAME = LibraryDB.TABLE_FAVORITE_SERIES
 
     ENTRYLABEL = 'Название:'
 
@@ -582,7 +628,7 @@ if __name__ == '__main__':
         window = Gtk.ApplicationWindow(Gtk.WindowType.TOPLEVEL)
         window.connect('destroy', lambda w: Gtk.main_quit())
 
-        #window.set_size_request(800, -1)
+        window.set_size_request(400, 800)
 
         chooser = AuthorAlphaListChooser(lib, __onchoosed)
         chooser.update()

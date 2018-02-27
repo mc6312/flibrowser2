@@ -24,7 +24,7 @@ from gi import require_version
 require_version('Gtk', GTK_VERSION) # извращенцы
 
 from gi.repository import Gtk, Gdk, GObject, Pango, GLib, Gio
-from gi.repository.GdkPixbuf import Pixbuf
+from gi.repository.GdkPixbuf import Pixbuf, Colorspace as GdkPixbuf_Colorspace
 
 import cairo
 
@@ -50,6 +50,29 @@ if WIDGET_SPACING < 4:
 
 # Вынимание! GTK желает юникода!
 UI_ENCODING = 'utf-8'
+
+
+def load_system_icon(name, size, pixelsize=False):
+    """Возвращает Pixbuf для иконки с именем name и размером size.
+
+    size - Gtk.IconSize.* если pixelsize==False, иначе - размер
+    в пикселях."""
+
+    if not pixelsize:
+        size = Gtk.IconSize.lookup(size)[1]
+
+    return Gtk.IconTheme.get_default().load_icon(name,
+        size,
+        Gtk.IconLookupFlags.FORCE_SIZE)
+
+
+#
+# "общие" иконки
+#
+MENU_ICON_SIZE_PIXELS =  Gtk.IconSize.lookup(Gtk.IconSize.MENU)[1]
+
+iconNonStarred = load_system_icon('non-starred', MENU_ICON_SIZE_PIXELS, True)
+iconStarred = load_system_icon('starred', MENU_ICON_SIZE_PIXELS, True)
 
 
 def create_scwindow(overlay=False):
@@ -552,6 +575,14 @@ class DateChooser():
             self.update_display()
 
             self.__date_changed()
+
+
+def clear_menu(menu):
+    """Удаляет все дочерние элементы menu - экземпляра Gtk.Menu."""
+
+    children = menu.get_children()
+    for child in children:
+        menu.remove(child)
 
 
 def get_resource_loader(env):

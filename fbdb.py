@@ -38,10 +38,12 @@ class Database():
     """Тупая обёртка над sqlite3.Connection.
 
     TABLES  - список или кортеж, содержащий описания таблиц БД -
-              кортежи из двух элементов вида
-              ('имя таблицы', 'типы столбцов'),
+              кортежи из двух или трёх элементов вида
+              ('имя таблицы', 'типы столбцов'[, dontreset]),
               где 'типы столбцов' - строка с перечислением типов
-              столбцов в синтаксисе sqlite3.
+              столбцов в синтаксисе sqlite3,
+              а dontreset - булевское значение, влияющее на работу
+              метода reset_tables().
               Это поле используется методами init_tables()
               и reset_tables(), и должно быть перекрыто классом-потомком."""
 
@@ -89,7 +91,12 @@ class Database():
         if self.connection is None:
             raise Exception('%s.init_tables(): БД не подключена!' % self.__class__.__name__)
         else:
-            for dbname, dbflds in self.TABLES:
+            for ixp, dbparms in enumerate(self.TABLES):
+                if len(dbparms) not in (2, 3):
+                    raise ValueError('%s.init_tables(): неправильное количество элементов списка параметров таблицы #%d' % (self.__class__.__name__, ixp))
+
+                dbname, dbflds = dbparms[:2]
+
                 self.cursor.execute('''CREATE TABLE IF NOT EXISTS %s(%s)''' % (dbname, dbflds))
 
     def reset_tables(self):
@@ -100,8 +107,16 @@ class Database():
         if self.connection is None:
             raise Exception('%s.init_tables(): БД не подключена!' % self.__class__.__name__)
         else:
-            for dbname, dbflds in self.TABLES:
-                self.cursor.execute('''DROP TABLE IF EXISTS %s;''' % dbname)
+            for ixp, dbparms in enumerate(self.TABLES):
+                nparms = len(dbparms)
+                if nparms not in (2, 3):
+                    raise ValueError('%s.init_tables(): неправильное количество элементов списка параметров таблицы #%d' % (self.__class__.__name__, ixp))
+
+                if nparms > 2 and nparms[2] == True:
+                    # таблица, не подлежащая изничтожению
+                    continue
+
+                self.cursor.execute('''DROP TABLE IF EXISTS %s;''' % dbparms[0])
 
             if self.vacuumOnInit:
                 self.connection.execute('VACUUM;')

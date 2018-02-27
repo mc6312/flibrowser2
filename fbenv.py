@@ -276,7 +276,7 @@ if __name__ == '__main__':
 
     env = Environment()
     print(env)
-    exit(1)
+    #exit(1)
 
     cfg = Settings(env)
 

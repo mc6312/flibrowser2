@@ -51,6 +51,7 @@ class MainWnd():
     COL_BOOK_DATE, COL_BOOK_AGEICON = range(7)
 
     CPAGE_AUTHORS, CPAGE_SERIES, CPAGE_SEARCH = range(3)
+    PAGE_NAMES = ('authors', 'series', 'search')
 
     def destroy(self, widget, data=None):
         Gtk.main_quit()
@@ -202,11 +203,13 @@ class MainWnd():
                 ('booksRandomChoice', None, 'Случайный выбор',
                     '<Control>r', 'Случайный выбор книги', lambda b: self.random_book_choice()),
                 # 'document-save-symbolic'
-                ('booksExtract', Gtk.STOCK_SAVE, 'Извлечь книги',
+                ('booksExtract', Gtk.STOCK_SAVE, 'Извлечь',
                     '<Control>e', 'Извлечь выбранные книги из библиотеки', lambda b: self.extract_books()),
                 #
-                ('booksSearch', Gtk.STOCK_FIND, 'Искать книги',
+                ('booksSearch', Gtk.STOCK_FIND, 'Искать',
                     '<Control>f', 'Искать книги в библиотеке', lambda b: self.search_books()),
+                ('booksFavoriteAuthors', None, 'Избранные авторы', None, None, None),
+                ('booksFavoriteSeries', None, 'Избранные сериалы/циклы', None, None, None),
             ))
 
         uimgr = Gtk.UIManager()
@@ -216,13 +219,16 @@ class MainWnd():
                 <menu name="mnuFile" action="file">
                     <menuitem name="mnuFileAbout" action="fileAbout"/>
                     <menuitem name="mnuFileSettings" action="fileSettings"/>
-                    <separator/>
+                    <separator />
                     <menuitem name="mnuFileExit" action="fileExit"/>
                 </menu>
                 <menu name="mnuBooks" action="books">
                     <menuitem name="mnuBooksSearch" action="booksSearch"/>
                     <menuitem name="mnuBooksRandomChoice" action="booksRandomChoice"/>
                     <menuitem name="mnuBooksExtract" action="booksExtract"/>
+                    <separator />
+                    <menu name="mnuBooksFavoriteAuthors" action="booksFavoriteAuthors" />
+                    <menu name="mnuBooksFavoriteSeries" action="booksFavoriteSeries" />
                 </menu>
             </menubar>
             </ui>''')
@@ -236,6 +242,16 @@ class MainWnd():
 
         self.mnuitemExtractBooks = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksExtract')
         self.mnuitemSearchBooks = uimgr.get_widget('/ui/menubar/mnuFile/mnuBooksSearch')
+
+        self.mnuFavoriteAuthors = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteAuthors').get_submenu()
+        self.mnuFavoriteSeries = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteSeries').get_submenu()
+
+        clear_menu(self.mnuFavoriteAuthors)
+        for ix in range(1, 11):
+            item = Gtk.MenuItem.new_with_label('Author #%d' % ix)
+            item.connect('activate', self.select_favorite_author, ix)
+            self.mnuFavoriteAuthors.append(item)
+
 
         #
         # морда будет из двух вертикальных панелей
@@ -529,6 +545,9 @@ class MainWnd():
 
         if self.curChooser.firstWidget is not None:
             self.curChooser.firstWidget.grab_focus()
+
+    def select_favorite_author(self, mnuitem, aix):
+        print('Favorite author #%d selected' % aix)
 
     def roothpaned_moved(self, paned, data=None):
         pp = paned.get_position()
