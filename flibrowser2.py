@@ -187,52 +187,55 @@ class MainWnd():
         actions = Gtk.ActionGroup('ui')
         actions.add_actions(
             # action-name,stock-id,label,accel,toltip,callback
-            (('file', None, '☰', None, None, None),
+            (('file', None, 'Файл', None, None, None),
                 # 'help-about-symbolic'
                 ('fileAbout', Gtk.STOCK_ABOUT, 'О программе',
                     '<Alt>F1', 'Информация о программе', lambda b: self.dlgabout.run()),
-                # 'media-playlist-shuffle-symbolic'
-                ('fileRandomChoice', None, 'Случайный выбор',
-                    '<Control>r', 'Случайный выбор книги', lambda b: self.random_book_choice()),
-                # 'document-save-symbolic'
-                ('fileExtractBooks', Gtk.STOCK_SAVE, 'Извлечь книги',
-                    '<Control>e', 'Извлечь выбранные книги из библиотеки', lambda b: self.extract_books()),
-                #
-                ('fileSearchBooks', Gtk.STOCK_FIND, 'Искать книги',
-                    '<Control>f', 'Искать книги в библиотеке', lambda b: self.search_books()),
                 # 'preferences-system-symbolic'
                 ('fileSettings', Gtk.STOCK_PREFERENCES, 'Настройка',
                     None, 'Настройка программы', lambda b: self.change_settings()),
                 # 'application-exit-symbolic'
                 ('fileExit', Gtk.STOCK_QUIT, 'Выход',
                     '<Control>q', 'Завершить программу', self.destroy),
+            ('books', None, 'Книги', None, None, None),
+                # 'media-playlist-shuffle-symbolic'
+                ('booksRandomChoice', None, 'Случайный выбор',
+                    '<Control>r', 'Случайный выбор книги', lambda b: self.random_book_choice()),
+                # 'document-save-symbolic'
+                ('booksExtract', Gtk.STOCK_SAVE, 'Извлечь книги',
+                    '<Control>e', 'Извлечь выбранные книги из библиотеки', lambda b: self.extract_books()),
+                #
+                ('booksSearch', Gtk.STOCK_FIND, 'Искать книги',
+                    '<Control>f', 'Искать книги в библиотеке', lambda b: self.search_books()),
             ))
 
         uimgr = Gtk.UIManager()
         uimgr.insert_action_group(actions)
-        uimgr.add_ui_from_string(u'''<ui><menubar>
-            <menu name="mnuFile" action="file">
-                <menuitem name="mnuFileAbout" action="fileAbout"/>
-                <menuitem name="mnuFileSearchBooks" action="fileSearchBooks"/>
-                <menuitem name="mnuFileRandomChoice" action="fileRandomChoice"/>
-                <menuitem name="mnuFileExtractBooks" action="fileExtractBooks"/>
-                <separator/>
-                <menuitem name="mnuFileSettings" action="fileSettings"/>
-                <separator/>
-                <menuitem name="mnuFileExit" action="fileExit"/>
-            </menu></menubar>
+        uimgr.add_ui_from_string(u'''<ui>
+            <menubar>
+                <menu name="mnuFile" action="file">
+                    <menuitem name="mnuFileAbout" action="fileAbout"/>
+                    <menuitem name="mnuFileSettings" action="fileSettings"/>
+                    <separator/>
+                    <menuitem name="mnuFileExit" action="fileExit"/>
+                </menu>
+                <menu name="mnuBooks" action="books">
+                    <menuitem name="mnuBooksSearch" action="booksSearch"/>
+                    <menuitem name="mnuBooksRandomChoice" action="booksRandomChoice"/>
+                    <menuitem name="mnuBooksExtract" action="booksExtract"/>
+                </menu>
+            </menubar>
             </ui>''')
 
         #self.tasksensitivewidgets.append(mnu)
 
-        mnufile = uimgr.get_widget('/ui/menubar')#'/mnuFile')
-
-        headerbar.pack_start(mnufile)
+        mainmenu = uimgr.get_widget('/ui/menubar')
+        headerbar.pack_start(mainmenu)
 
         self.window.add_accel_group(uimgr.get_accel_group())
 
-        self.mnuitemExtractBooks = uimgr.get_widget('/ui/menubar/mnuFile/mnuFileExtractBooks')
-        self.mnuitemSearchBooks = uimgr.get_widget('/ui/menubar/mnuFile/mnuFileSearchBooks')
+        self.mnuitemExtractBooks = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksExtract')
+        self.mnuitemSearchBooks = uimgr.get_widget('/ui/menubar/mnuFile/mnuBooksSearch')
 
         #
         # морда будет из двух вертикальных панелей
