@@ -26,6 +26,50 @@
 from os.path import join as path_join
 
 
+MAX_FIELD_LEN = 64
+ELLIPSIS = '…'
+
+def truncate_author_name(authorname):
+    """Сокращение имени автора до ~MAX_FIELD_LEN символов.
+
+    Т.к. в БД могут быть длинные "составные" имена вида
+    "Автор1, Автор2, ...АвторN", то шаблоны, добавляющие имя автора
+    в имя файла, должны использовать этот метод."""
+
+    authors = list(map(lambda s: s.strip(), authorname.split(',')))
+    numauthors = len(authors)
+
+    authorname = ''
+
+    ixauthor = 0
+    for author in authors:
+        ixauthor += 1
+
+        if authorname:
+            authorname += ', '
+
+        authorname += author
+
+        namelen = len(authorname)
+
+        if namelen > MAX_FIELD_LEN:
+            authorname = authorname[:MAX_FIELD_LEN] + ELLIPSIS
+            break
+
+    if ixauthor < numauthors:
+        authorname += ' и еще %d' % (numauthors - ixauthor)
+
+    return authorname
+
+def truncate_str(s):
+    """Обрезает строку s до MAX_FIELD_LEN символов."""
+
+    if len(s) > MAX_FIELD_LEN:
+        s = s[:MAX_FIELD_LEN - 1] + ELLIPSIS
+
+    return s
+
+
 class Template():
     """Класс для генерации имён файлов на основе полей, полученных из БД.
 
@@ -56,49 +100,6 @@ class Template():
 
         return ('', filename)
 
-    MAX_FIELD_LEN = 64
-    ELLIPSIS = '…'
-
-    def truncate_author_name(self, authorname):
-        """Сокращение имени автора до ~MAX_FIELD_LEN символов.
-
-        Т.к. в БД могут быть длинные "составные" имена вида
-        "Автор1, Автор2, ...АвторN", то шаблоны, добавляющие имя автора
-        в имя файла, должны использовать этот метод."""
-
-        authors = list(map(lambda s: s.strip(), authorname.split(',')))
-        numauthors = len(authors)
-
-        authorname = ''
-
-        ixauthor = 0
-        for author in authors:
-            ixauthor += 1
-
-            if authorname:
-                authorname += ', '
-
-            authorname += author
-
-            namelen = len(authorname)
-
-            if namelen > self.MAX_FIELD_LEN:
-                authorname = authorname[:self.MAX_FIELD_LEN] + self.ELLIPSIS
-                break
-
-        if ixauthor < numauthors:
-            authorname += ' и еще %d' % (numauthors - ixauthor)
-
-        return authorname
-
-    def truncate_str(self, s):
-        """Обрезает строку s до MAX_FIELD_LEN символов."""
-
-        if len(s) > self.MAX_FIELD_LEN:
-            s = s[:self.MAX_FIELD_LEN - 1] + self.ELLIPSIS
-
-        return s
-
 
 class TitleSeriesTemplate(Template):
     DISPLAY = 'Название книги (Название цикла - номер)'
@@ -109,9 +110,9 @@ class TitleSeriesTemplate(Template):
         Имя каталога не создаёт."""
 
         if seriestitle:
-            seriestitle = '%s%s' % (self.truncate_str(seriestitle), '' if serno < 1 else ' - %d' % serno)
+            seriestitle = '%s%s' % (truncate_str(seriestitle), '' if serno < 1 else ' - %d' % serno)
 
-        return ('', '%s%s' % (self.truncate_str(title), '' if not seriestitle else ' (%s)' % seriestitle))
+        return ('', '%s%s' % (truncate_str(title), '' if not seriestitle else ' (%s)' % seriestitle))
 
 
 class AuthorDirTitleSeriesTemplate(TitleSeriesTemplate):
@@ -122,7 +123,7 @@ class AuthorDirTitleSeriesTemplate(TitleSeriesTemplate):
         """Создаёт имя каталога на основе поля authorname.
         Имя файла создаётся так же, как в TitleSeriesTemplate.create_file_name()."""
 
-        return (self.truncate_author_name(authorname),
+        return (truncate_author_name(authorname),
             super().create_file_name(filename, title, seriestitle, serno, authorname)[1])
 
 
@@ -133,16 +134,16 @@ class AuthorDirSeriesDirTitleTemplate(Template):
     def create_file_name(self, filename, title, seriestitle, serno, authorname):
         """См. значение DISPLAY."""
 
-        subdir = [self.truncate_author_name(authorname)]
+        subdir = [truncate_author_name(authorname)]
 
         if seriestitle:
-            subdir.append(self.truncate_str(seriestitle))
+            subdir.append(truncate_str(seriestitle))
 
         name = []
         if seriestitle and serno:
             name.append('%d - ' % serno)
 
-        name.append(self.truncate_str(title))
+        name.append(truncate_str(title))
 
         return (path_join(*subdir), ''.join(name))
 
@@ -157,11 +158,11 @@ class SeriesDirAuthorTitleTemplate(Template):
         if seriestitle and serno:
             name.append('%d - ' % serno)
 
-        name.append('%s - ' % self.truncate_author_name(authorname))
+        name.append('%s - ' % truncate_author_name(authorname))
 
-        name.append(self.truncate_str(title))
+        name.append(truncate_str(title))
 
-        return (self.truncate_str(seriestitle), ''.join(name))
+        return (truncate_str(seriestitle), ''.join(name))
 
 """templates - список экземпляров классов шаблонов для UI"""
 

@@ -31,6 +31,8 @@ DB_DATE_FORMAT = '%Y-%m-%d'
 
 
 def sqlite_ulower(s):
+    """Костыльная функция для кривой замены unicode collation"""
+
     return s.lower()
 
 
@@ -112,7 +114,7 @@ class Database():
                 if nparms not in (2, 3):
                     raise ValueError('%s.init_tables(): неправильное количество элементов списка параметров таблицы #%d' % (self.__class__.__name__, ixp))
 
-                if nparms > 2 and nparms[2] == True:
+                if nparms > 2 and dbparms[2] == True:
                     # таблица, не подлежащая изничтожению
                     continue
 

@@ -35,7 +35,7 @@ commit:
 docview:
 	$(eval docname = README.htm)
 	@echo "<html><head><meta charset="utf-8"><title>Flibrowser 2 README</title></head><body>" >$(docname)
-	markdown README.md >>$(docname)
+	markdown_py README.md >>$(docname)
 	@echo "</body></html>" >>$(docname)
 	exo-open $(docname)
 	#rm $(docname)

@@ -189,20 +189,17 @@ class MainWnd():
         actions.add_actions(
             # action-name,stock-id,label,accel,toltip,callback
             (('file', None, 'Файл', None, None, None),
-                # 'help-about-symbolic'
                 ('fileAbout', Gtk.STOCK_ABOUT, 'О программе',
                     '<Alt>F1', 'Информация о программе', lambda b: self.dlgabout.run()),
-                # 'preferences-system-symbolic'
+                ('fileImport', Gtk.STOCK_REFRESH, 'Импорт библиотеки',
+                    None, 'Импорт индексного файла (INPX) библиотеки', lambda b: self.import_library(True)),
                 ('fileSettings', Gtk.STOCK_PREFERENCES, 'Настройка',
                     None, 'Настройка программы', lambda b: self.change_settings()),
-                # 'application-exit-symbolic'
                 ('fileExit', Gtk.STOCK_QUIT, 'Выход',
                     '<Control>q', 'Завершить программу', self.destroy),
             ('books', None, 'Книги', None, None, None),
-                # 'media-playlist-shuffle-symbolic'
                 ('booksRandomChoice', None, 'Случайный выбор',
                     '<Control>r', 'Случайный выбор книги', lambda b: self.random_book_choice()),
-                # 'document-save-symbolic'
                 ('booksExtract', Gtk.STOCK_SAVE, 'Извлечь',
                     '<Control>e', 'Извлечь выбранные книги из библиотеки', lambda b: self.extract_books()),
                 #
@@ -218,6 +215,7 @@ class MainWnd():
             <menubar>
                 <menu name="mnuFile" action="file">
                     <menuitem name="mnuFileAbout" action="fileAbout"/>
+                    <menuitem name="mnuFileImport" action="fileImport"/>
                     <menuitem name="mnuFileSettings" action="fileSettings"/>
                     <separator />
                     <menuitem name="mnuFileExit" action="fileExit"/>
@@ -246,12 +244,8 @@ class MainWnd():
         self.mnuFavoriteAuthors = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteAuthors').get_submenu()
         self.mnuFavoriteSeries = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteSeries').get_submenu()
 
-        clear_menu(self.mnuFavoriteAuthors)
-        for ix in range(1, 11):
-            item = Gtk.MenuItem.new_with_label('Author #%d' % ix)
-            item.connect('activate', self.select_favorite_author, ix)
-            self.mnuFavoriteAuthors.append(item)
-
+        self.update_favorite_authors()
+        self.update_favorite_series()
 
         #
         # морда будет из двух вертикальных панелей
@@ -295,7 +289,7 @@ class MainWnd():
             SearchFilterChooser)
 
         for chooserclass in __chsrs:
-            chooser = chooserclass(self.lib, self.update_books)
+            chooser = chooserclass(self.lib, self.update_books_by_chooser)
 
             self.choosers.append(chooser)
             if chooser.RANDOM:
@@ -305,6 +299,12 @@ class MainWnd():
             lab.set_use_underline(True)
 
             self.chooserpages.append_page(chooser.box, lab)
+
+        self.selectWhere = None # None или строка с условиями для параметра WHERE
+        # SQL-запроса в методе self.update_books()
+
+        self.choosers[self.CPAGE_AUTHORS].onfavoriteclicked = self.update_favorite_authors
+        self.choosers[self.CPAGE_SERIES].onfavoriteclicked = self.update_favorite_series
 
         self.curChooser = None
         self.chooserpages.connect('switch-page', self.chooser_page_switched)
@@ -546,8 +546,58 @@ class MainWnd():
         if self.curChooser.firstWidget is not None:
             self.curChooser.firstWidget.grab_focus()
 
-    def select_favorite_author(self, mnuitem, aix):
-        print('Favorite author #%d selected' % aix)
+    def update_favorites_menu(self, menu, favparams, truncfunc):
+        """Обновление содержимого меню избранного.
+
+        menu        - экземпляр Gtk.Menu,
+        favparams   - экземпляр LibraryDB.favorite_params,
+        truncfunc   - функция со строковым параметром,
+                      обрезающая слишком длинную строку."""
+
+        clear_menu(menu)
+
+        nitems = 0
+
+        cur = self.lib.cursor.execute('SELECT name FROM %s ORDER BY name;' % favparams.favtablename)
+        while True:
+            r = cur.fetchone()
+            if r is None:
+                break
+
+            nitems += 1
+
+            item = Gtk.MenuItem.new_with_label(truncfunc(r[0]))
+            item.connect('activate', self.select_favorite, (favparams, r[0]))
+            menu.append(item)
+
+        if nitems == 0:
+            item = Gtk.MenuItem.new_with_label('<нет>')
+            item.set_sensitive(False)
+            menu.append(item)
+
+        menu.show_all()
+
+    def update_favorite_authors(self):
+        self.update_favorites_menu(self.mnuFavoriteAuthors,
+            LibraryDB.FAVORITE_AUTHORS_PARAMS,
+            fbfntemplate.truncate_author_name)
+
+    def update_favorite_series(self):
+        self.update_favorites_menu(self.mnuFavoriteSeries,
+            LibraryDB.FAVORITE_SERIES_PARAMS,
+            fbfntemplate.truncate_str)
+
+    def select_favorite(self, mnuitem, data):
+        """Метод, вызываемый при выборе элемента меню избранного.
+
+        Eго параметры такие же, как у обработчика сигнала "activate"
+        Gtk.MenuItem, дополнительный параметр data -
+        кортеж из двух элементов - экземпляра LibraryDB.favorite_params
+        и значения primary key соответствующего элемента таблицы БД."""
+
+        self.selectWhere = self.lib.get_favorite_where_param(*data)
+
+        self.update_books()
 
     def roothpaned_moved(self, paned, data=None):
         pp = paned.get_position()
@@ -649,6 +699,10 @@ class MainWnd():
 
         self.chooserpages.set_current_page(self.CPAGE_SEARCH)
 
+    def update_books_by_chooser(self):
+        self.selectWhere = self.curChooser.selectWhere
+        self.update_books()
+
     def update_books(self):
         """Обновление списка книг.
 
@@ -665,7 +719,7 @@ class MainWnd():
         stotalbooks = '%d' % ntotalbooks
         nbooks = 0
 
-        if self.curChooser.selectWhere is not None:
+        if self.selectWhere is not None:
             # получаем список книг
             q = '''SELECT books.bookid,books.title,serno,seriesnames.title,date,authornames.name
                 FROM books
@@ -673,7 +727,7 @@ class MainWnd():
                 INNER JOIN authornames ON authornames.authorid=books.authorid
                 WHERE %s
                 ORDER BY authornames.name, seriesnames.title, serno, books.title, date;'''\
-                % self.curChooser.selectWhere
+                % self.selectWhere
 
             #print(q)
             cur = self.lib.cursor.execute(q)

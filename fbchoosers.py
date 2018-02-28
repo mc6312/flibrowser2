@@ -142,8 +142,8 @@ class AlphaListChooser(FilterChooser):
     COLALPHA            = None # имя столбца с 1й буквой (alpha) в таблицах alphatable и nametable
     COLNAMETEXT         = None # имя столбца с отображаемым текстом в nametable
     EMPTYALPHATEXT      = None # значение, отображаемое в alphalist, если alpha==''
-    FAVORITETABLENAME   = None # имя таблицы в БД со списком избранных имён
-                               # (см. TABLE_FAVORITE_* в fblib.LibraryDB)
+    FAVORITEPARAMS      = None # экземпляр LibraryDB.favorite_params
+                               # (см. FAVORITE_*_PARAMS в fblib.LibraryDB)
 
     ENTRYLABEL = '' # текст метки поля ввода
 
@@ -157,6 +157,11 @@ class AlphaListChooser(FilterChooser):
         """Инициализация объекта и создание виджетов."""
 
         super().__init__(lib, onchoosed)
+
+        self.onfavoriteclicked = None
+        # метод или функция, вызываемые при нажатии "Enter" на строке
+        # списка имён или при двойном клике на левом столбце строки списка;
+        # функция не получает параметров
 
         # буква, выбранная в self.alphalist
         self.selectedAlpha = None
@@ -296,29 +301,38 @@ class AlphaListChooser(FilterChooser):
         self.update_namelist()
 
     def namelist_clicked(self, view, path, col):
+        """Обработка двойного клика или нажатия "Enter" на строке
+        в списке имён.
+        И, соответственно, добавление/удаление соотв. элемента в/из
+        списка избранного."""
+
         col = self.namelist.colmap[col]
         storeiter = self.namelist.store.get_iter(path)
 
-        if col == self.COL_NAME_FAVORITE:
-            icon, name = self.namelist.store.get(storeiter,
-                self.COL_NAME_FAVORITE, self.COL_NAME_TEXT)
+        icon, name = self.namelist.store.get(storeiter,
+            self.COL_NAME_FAVORITE, self.COL_NAME_TEXT)
 
-            if icon is None:
-                self.lib.add_favorite(self.FAVORITETABLENAME, name)
-                icon = iconStarred
-            else:
-                self.lib.remove_favorite(self.FAVORITETABLENAME, name)
-                icon = None
+        if icon is None:
+            self.lib.add_favorite(self.FAVORITETABLENAME, name)
+            icon = iconStarred
+        else:
+            self.lib.remove_favorite(self.FAVORITETABLENAME, name)
+            icon = None
 
-            self.namelist.store.set_value(storeiter, self.COL_NAME_FAVORITE, icon)
+        self.namelist.store.set_value(storeiter, self.COL_NAME_FAVORITE, icon)
+
+        #print('onfavoriteclicked:', self.onfavoriteclicked)
+        if callable(self.onfavoriteclicked):
+            self.onfavoriteclicked()
 
     def namelist_selected(self, sel, data=None):
-        """Обработка события выбора элемента(ов) в списке имён"""
+        """Обработка события выбора элемента(ов) в списке имён."""
 
         rows = self.namelist.selection.get_selected_rows()[1]
 
         if rows:
-            self.selectWhere = 'books.%s=%s' % (self.COLNAMEID, self.namelist.store.get_value(self.namelist.store.get_iter(rows[0]), self.COL_NAME_ID))
+            self.selectWhere = 'books.%s=%s' % (self.COLNAMEID,
+                self.lib.sqlite_quote(self.namelist.store.get_value(self.namelist.store.get_iter(rows[0]), self.COL_NAME_ID)))
         else:
             self.selectedWhere = None
 
@@ -558,7 +572,8 @@ class SearchFilterChooser(FilterChooser):
 
         def __add_date(date, cmpoper):
             if date is not None:
-                where.append('date %s "%s"' % (cmpoper, date.strftime(DB_DATE_FORMAT)))
+                where.append('date %s %s' % (cmpoper,
+                    self.lib.sqlite_quote(date.strftime(DB_DATE_FORMAT))))
 
         __add_date(self.datefrom, datefromoper)
         __add_date(self.dateto, datetooper)
@@ -630,7 +645,11 @@ if __name__ == '__main__':
 
         window.set_size_request(400, 800)
 
+        def fav_clicked():
+            print('fav_clicked')
+
         chooser = AuthorAlphaListChooser(lib, __onchoosed)
+        chooser.onfavoriteclicked = fav_clicked
         chooser.update()
         #chooser = SearchFilterChooser(lib, __onchoosed)
         window.add(chooser.box)

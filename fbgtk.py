@@ -582,6 +582,7 @@ def clear_menu(menu):
 
     children = menu.get_children()
     for child in children:
+        #print(child, child.get_label())
         menu.remove(child)
 
 

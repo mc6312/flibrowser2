@@ -29,6 +29,7 @@ import sqlite3
 import datetime
 import zipfile
 import os.path
+from collections import namedtuple
 
 
 class LibraryDB(Database):
@@ -36,6 +37,17 @@ class LibraryDB(Database):
     TABLE_FAVORITE_SERIES = 'favorite_series'
 
     __FAVORITE_FIELDS = 'name TEXT PRIMARY KEY'
+
+    favorite_params = namedtuple('favorite_params', 'favtablename libtablename libtablecolname')
+    """favtablename     - имя таблицы favorite_* БД,
+    libtablename        - имя таблицы БД, по которой выполняется запрос (authornames или seriesnames),
+    libtablecolname     - имя столбца вышеуказанной таблицы, по которому выполняется запрос."""
+
+    FAVORITE_AUTHORS_PARAMS = favorite_params(TABLE_FAVORITE_AUTHORS,
+        'authornames', 'name')
+
+    FAVORITE_SERIES_PARAMS = favorite_params(TABLE_FAVORITE_SERIES,
+        'seriesnames', 'title')
 
     TABLES = (# главная таблица - список книг
         ('books', '''bookid INTEGER PRIMARY KEY,
@@ -61,11 +73,24 @@ bundleid INTEGER'''),
         ('genrenames', '''tag VARCHAR(64), name VARCHAR(128), category VARCHAR(128)'''),
         # таблица имён файлов архивов с книгами
         ('bundles', '''bundleid INTEGER PRIMARY KEY, filename VARCHAR(256)'''),
+        #
+        # "нестираемые" таблицы - не очищаются при импорте библиотеки
+        #
         # таблица имён избранных авторов
-        (TABLE_FAVORITE_AUTHORS, __FAVORITE_FIELDS),
+        (TABLE_FAVORITE_AUTHORS, __FAVORITE_FIELDS, True),
         # таблица названий избранных циклов/сериалов
-        (TABLE_FAVORITE_SERIES, __FAVORITE_FIELDS),
+        (TABLE_FAVORITE_SERIES, __FAVORITE_FIELDS, True),
         )
+
+    def sqlite_quote(self, s):
+        """Приводит строку s к виду, пригодному для добавления в строку
+        SQL-запроса с помощью питоньего символа подстановки параметров
+        (в отличие от sqlite placeholders, которые не везде применимы).
+        Возвращает преобразованную строку."""
+
+        self.cursor.execute('select quote(?);', (s,))
+        r = self.cursor.fetchone()
+        return None if r is None else r[0]
 
     def get_name_first_letter(self, name):
         """Возвращает первый буквенно-цифровой символ из строки name,
@@ -96,6 +121,16 @@ bundleid INTEGER'''),
         (TABLE_FAVORITE_*.)."""
 
         self.cursor.execute('DELETE FROM %s WHERE name=?;' % tablename, (favname,))
+
+    def get_favorite_where_param(self, favparams, value):
+        """Возвращает условие для параметра WHERE SQL-запроса.
+
+        favparams - экземпляр favorite_params,
+        value - значение столбца из таблицы FAVORITE_TABLE_NAME."""
+
+        return '%s.%s=%s' % (favparams.libtablename,
+            favparams.libtablecolname,
+            self.sqlite_quote(value))
 
 
 class StrHashIdDict():
@@ -320,27 +355,15 @@ def import_genre_names_list(lib, fname):
 
 
 def __test_inpx_import(lib, cfg, inpxFileName): #, genreNamesFile):
-    class TestImporter(INPXImporter):
-        PROGRESS_DELAY = 1000
-
-        def __init__(self, lib, cfg):
-            super().__init__(lib, cfg)
-
-            self.progressdelay = self.PROGRESS_DELAY
-
-        def show_progress(self, fraction):
-            if self.progressdelay > 0:
-                self.progressdelay -= 1
-            else:
-                self.progressdelay = self.PROGRESS_DELAY
-                print('%d%%\x0d' % int(fraction * 100), end='')
+    def show_progress(fraction):
+        print('%d%%\x0d' % int(fraction * 100), end='')
 
     print('Initializing DB (%s)...' % lib.dbfilename)
     lib.reset_tables()
 
     print('Importing INPX file "%s"...' % inpxFileName)
-    importer = TestImporter(lib, cfg)
-    importer.import_inpx_file(inpxFileName, importer.show_progress)
+    importer = INPXImporter(lib, cfg)
+    importer.import_inpx_file(inpxFileName, show_progress)
     print()
 
     #print('Importing genre name list "%s"...' % genreNamesFile)
@@ -418,8 +441,8 @@ if __name__ == '__main__':
     lib.connect()
     try:
         #__test_inpx_import(lib, cfg, inpxFileName)#, genreNamesFile)
-        __test_book_list(lib)
+        #__test_book_list(lib)
         #__test_genre_list(lib)
-        #pass
+        pass
     finally:
         lib.disconnect()
