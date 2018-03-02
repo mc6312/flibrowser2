@@ -31,6 +31,18 @@ from zipfile import is_zipfile
 from fbdb import *
 
 
+def get_file_timestamp(fname):
+    """Если файл существует, возвращает его mtime в секундах, округлённое
+    до часов (ибо файл может лежать на какой-нибудь недо-ФС вроде FAT,
+    где время неточное).
+    Если файла нет - возвращает 0."""
+
+    if not os.path.exists(fname):
+        return 0
+
+    return int(round((os.stat(fname).st_mtime / 3600) * 3600))
+
+
 class Environment():
     """Класс, определяющий и хранящий пути к файлам данных и настроек."""
 
@@ -117,8 +129,8 @@ class Environment():
         """Отображение для отладки"""
 
         return '''%s:
-  appIsZIP=%s,
-  appFilePath="%s",
+  appIsZIP=%s
+  appFilePath="%s"
   appDir="%s"
   dataDir="%s"
   configDir="%s"
@@ -126,7 +138,8 @@ class Environment():
   libraryFilePath="%s"''' % (self.__class__.__name__,
     self.appIsZIP, self.appFilePath,
     self.appDir, self.dataDir, self.configDir,
-    self.configFilePath, self.libraryFilePath)
+    self.configFilePath,
+    self.libraryFilePath)
 
 
 class Settings(Database):
@@ -147,6 +160,9 @@ class Settings(Database):
     # индексный файл библиотеки для импорта
     IMPORT_INPX_INDEX = 'inpx_index'
     #GENRE_NAMES_PATH = 'genre_names_path'
+    # время последнего изменения индексного файла библиотеки
+    # округлённое до часов
+    IMPORT_INPX_INDEX_TIMESTAMP = 'inpx_index_timestamp'
     # импортируемые языки
     IMPORT_LANGUAGES = 'import_languages'
 
@@ -275,7 +291,7 @@ if __name__ == '__main__':
     print('[test]')
 
     env = Environment()
-    print(env)
+    #print(env)
     #exit(1)
 
     cfg = Settings(env)
@@ -288,10 +304,10 @@ if __name__ == '__main__':
         #cfg.set_param(cfg.LIBRARY_DIRECTORY, './')
         #cfg.set_param(cfg.IMPORT_INPX_INDEX, './flibusta_fb2_local.inpx')
         #cfg.set_param(cfg.GENRE_NAMES_PATH, './lib.libgenrelist.sql')
-        cfg.set_param_bool(cfg.EXTRACT_PACK_ZIP, False)
+        #cfg.set_param_bool(cfg.EXTRACT_PACK_ZIP, False)
 
         print(cfg)
         #print(cfg.get_param(cfg.LIBRARY_DIRECTORY, '?'))
-        print(type(cfg.get_param_bool(cfg.EXTRACT_PACK_ZIP)))
+        #print(type(cfg.get_param_bool(cfg.EXTRACT_PACK_ZIP)))
     finally:
         cfg.unload()

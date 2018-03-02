@@ -365,11 +365,12 @@ class MainWnd():
         #
 
         self.selbookcount = Gtk.Label('0')
-        extractframe, efl = create_labeled_frame('_%s. Выбрано книг:' % fastlabel.__next__())
+        extractframe, efl = create_labeled_frame('_%s. Выбрано книг:' % fastlabel.__next__(), self.selbookcount)
 
         xfbox = Gtk.HBox(spacing=WIDGET_SPACING)
         xfbox.set_border_width(WIDGET_SPACING)
         extractframe.add(xfbox)
+
         self.ctlvbox.pack_start(extractframe, False, False, 0)
 
         # внезапно, кнопка
@@ -377,11 +378,11 @@ class MainWnd():
         self.btnextract.connect('clicked', lambda b: self.extract_books())
         xfbox.pack_start(self.btnextract, False, False, 0)
 
-        #!!!efl.set_mnemonic_widget(self.btnextract)
-
         # выбор каталога
         xfbox.pack_start(Gtk.Label('в каталог'), False, False, 0)
         self.destdirchooser = Gtk.FileChooserButton.new('Выбор каталога для извлечения книг', Gtk.FileChooserAction.SELECT_FOLDER)
+
+        #!!!!
         efl.set_mnemonic_widget(self.destdirchooser)
 
         self.destdirchooser.set_filename(self.cfg.get_param(self.cfg.EXTRACT_TO_DIRECTORY, os.path.expanduser('~')))
@@ -466,7 +467,7 @@ class MainWnd():
         # создаём междумордие
         self.__create_ui()
 
-        self.check_1st_run()
+        self.check_startup_environment()
 
         self.update_choosers()
 
@@ -476,48 +477,144 @@ class MainWnd():
         for chooser in self.choosers:
             chooser.update()
 
-    def check_1st_run(self):
-        """Проверка на первый запуск и, при необходимости, первоначальная настройка."""
+    def check_startup_environment(self):
+        """Проверка на первый запуск и, при необходимости, первоначальная настройка.
+        Также проверка на устарелость индексного файла (.inpx).
+        При необходимости - импорт индексного файла."""
+
+        needImport = False
 
         if not self.cfg.has_required_settings():
             if self.dlgsetup.run('Первоначальная настройка') != Gtk.ResponseType.OK:
                 msg_dialog(self.window, TITLE_VERSION, 'Не могу работать без настройки', Gtk.MessageType.ERROR)
                 exit(1) #!!!
             else:
-                self.import_library()
+                needImport = True
         else:
-            #print('check db')
+            # создание (при необходимости) отсутствующих таблиц
+            # которые есть и чего-то содержат - их не трогаем
             self.lib.init_tables()
 
-    def import_library(self, askconfirm=False):
+        if not needImport:
+            # если на предыдущем шаге необходимость импорта не выявлена -
+            # дополнительно проверяем наличие и mtime индексного файла
+
+            inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
+            inpxTStamp = get_file_timestamp(inpxFileName)
+
+            if inpxTStamp != 0:
+                inpxStoredTStamp = self.cfg.get_param_int(self.cfg.IMPORT_INPX_INDEX_TIMESTAMP, 0)
+
+                if inpxStoredTStamp == 0 or inpxStoredTStamp != inpxTStamp:
+                    print('Индексный файл изменён, необходим его импорт.')
+
+                    if msg_dialog(self.window, 'Внимание!',
+                            'Индексный файл библиотеки ("%s") изменён.\nНеобходим его импорт.' %\
+                            os.path.split(inpxFileName)[1],
+                            buttons=Gtk.ButtonsType.OK_CANCEL) != Gtk.ResponseType.OK:
+                        print('Импорт индексного файла отменён, работа с неактуальным содержимым БД недопустима.')
+                        exit(1)
+
+                    needImport = True
+            # если inpxTStamp == 0 - индексного файла попросту нет, нечего импортировать
+
+        if needImport:
+            self.import_library()
+
+    def import_library(self, askconfirm=False, xtramsg=''):
         """Процедура импорта библиотеки.
 
-        askconfirm - спрашивать ли подтверждения
-                     (через Gtk.MessageDialog),
-                     если askconfirm=True."""
+        askconfirm  - спрашивать ли подтверждения
+                      (через Gtk.MessageDialog),
+                      если askconfirm=True;
+        xtramsg     - строка с дополнительным сообщением
+                      или пустая строка."""
 
         S_IMPORT = 'Импорт библиотеки'
 
         if askconfirm:
             if msg_dialog(self.window, S_IMPORT,
-                'Импорт библиотеки может быть долгим.\nПродолжить?',
+                '%sИмпорт библиотеки может быть долгим.\nПродолжить?' %\
+                    ('' if not xtramsg else '%s\n\n' % xtramsg),
                 buttons=Gtk.ButtonsType.YES_NO) != Gtk.ResponseType.YES:
                     return
 
         self.task_begin(S_IMPORT)
         try:
-            print('Инициализация БД (%s)...' % self.env.libraryFilePath)
-            self.task_msg('Инициализация БД')
-            self.lib.reset_tables()
+            self.lib.cursor.executescript('''CREATE TEMPORARY TABLE oldbookids(bookid INTEGER PRIMARY KEY);
+                CREATE TEMPORARY TABLE oldauthorids(authorid INTEGER PRIMARY KEY);''')
+            try:
+                # список books.bookid ДО импорта
+                self.lib.cursor.executescript('''INSERT OR REPLACE INTO oldbookids(bookid) SELECT bookid FROM books;
+                    INSERT OR REPLACE INTO oldauthorids(authorid) SELECT authorid FROM authornames;''')
 
-            inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
-            print('Импорт индекса библиотеки "%s"...' % inpxFileName)
-            self.task_msg('Импорт индекса библиотеки')
+                print('Инициализация БД (%s)...' % self.env.libraryFilePath)
+                self.task_msg('Инициализация БД')
+                self.lib.reset_tables()
 
-            importer = INPXImporter(self.lib, self.cfg)
-            importer.import_inpx_file(inpxFileName, self.task_progress)
+                inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
+                print('Импорт индекса библиотеки "%s"...' % inpxFileName)
+                self.task_msg('Импорт индекса библиотеки')
 
-            print('Импортировано книг: %d' % self.get_total_book_count())
+                importer = INPXImporter(self.lib, self.cfg)
+                importer.import_inpx_file(inpxFileName, self.task_progress)
+
+                # импорт успешен, ничего не упало, можно дальше изгаляться
+                # а если выскочило исключение, то один фиг нижеследующе не выполнится
+
+                # обновляем в БД настроек параметр с timestamp'ом индексного файла
+                self.cfg.set_param_int(self.cfg.IMPORT_INPX_INDEX_TIMESTAMP,
+                    get_file_timestamp(inpxFileName))
+
+                # собираем некоторую статистику
+
+                # получаем количества новых и удалённых книг
+                booksTotal = self.get_total_book_count()
+                booksNew = self.lib.get_table_dif_count('books', 'oldbookids', 'bookid')
+                booksDeleted = self.lib.get_table_dif_count('oldbookids', 'books', 'bookid')
+
+                # получаем количество удалённых книг
+                authorsTotal = self.lib.get_table_count('authornames')
+                authorsNew = self.lib.get_table_dif_count('authornames', 'oldauthorids', 'authorid')
+                authorsDeleted = self.lib.get_table_dif_count('oldauthorids', 'authornames', 'authorid')
+
+                print('''Книги:  импортировано   %d
+        добавлено новых %d
+        удалено         %d
+Авторы: всего           %d
+        добавлено       %d
+        удалено         %d''' % (booksTotal,
+                    booksNew, booksDeleted,
+                    authorsTotal,
+                    authorsNew, authorsDeleted))
+
+                if any((booksNew, booksDeleted, authorsNew, authorsDeleted)):
+                    # если после импорта чего-то изменилось - показываем окно со статистикой
+                    stgrid = LabeledGrid()
+
+                    def add_counter(t, v):
+                        stgrid.append_row(t)
+                        stgrid.append_col(create_aligned_label('%d' % v, 1.0), True)
+
+                    if booksNew:
+                        add_counter('Добавлено книг:', booksNew)
+
+                    if booksDeleted:
+                        add_counter('Удалено книг:', booksDeleted)
+
+                    if authorsNew:
+                        add_counter('Добавлено авторов:', authorsNew)
+
+                    if authorsDeleted:
+                        add_counter('Удалено авторов:', authorsDeleted)
+
+                    msg_dialog(self.window, 'Импорт библиотеки',
+                        'Импорт библиотеки завершён.', Gtk.MessageType.OTHER,
+                        widgets=(Gtk.HSeparator(), stgrid))
+
+            finally:
+                self.lib.cursor.executescript('''DROP TABLE IF EXISTS oldbookids;
+                    DROP TABLE IF EXISTS oldauthorids;''')
 
             self.update_choosers()
 
@@ -687,12 +784,7 @@ class MainWnd():
     def get_total_book_count(self):
         """Возвращает общее количество книг в БД"""
 
-        cur = self.lib.cursor.execute('select count(*) from books;')
-        r = cur.fetchone()
-        if r is None:
-            return 0
-        else:
-            return r[0]
+        return self.lib.get_table_count('books')
 
     def search_books(self):
         """Поиск книг по нескольким полям."""
@@ -818,6 +910,7 @@ def main():
                 if not dbexists:
                     lib.init_tables()
 
+                print('запуск UI')
                 mainwnd = MainWnd(lib, env, cfg)
                 mainwnd.main()
             finally:

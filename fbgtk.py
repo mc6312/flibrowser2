@@ -106,10 +106,8 @@ def create_labeled_frame(txt, *widgets):
     lab = Gtk.Label(txt)
     lab.set_use_underline(True)
     hbox.pack_start(lab, False, False, 0)
-
     for wgt in widgets:
         hbox.pack_start(wgt, False, False, 0)
-
     fr = Gtk.Frame()
     fr.set_label_widget(hbox)
 
@@ -278,13 +276,33 @@ class TreeViewer():
         return True
 
 
-def msg_dialog(parent, title, msg, msgtype=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.OK):
+def msg_dialog(parent, title, msg, msgtype=Gtk.MessageType.WARNING, buttons=Gtk.ButtonsType.OK, widgets=None):
+    """Показывает модальное диалоговое окно.
+
+    parent, title, ..., buttons - стандартные параметры Gtk.Dialog.
+
+    widgets - None или список экземпляров Gtk.Widget, которые будут
+              добавлены в content area диалогового окна.
+
+    Возвращает Gtk.ResponseType.*."""
+
     dlg = Gtk.MessageDialog(parent, 0, msgtype, buttons, msg,
         #use_header_bar=True, # странно ведёт себя в GNOME, кто б мог подумать?
         flags=Gtk.DialogFlags.MODAL|Gtk.DialogFlags.DESTROY_WITH_PARENT)
+
     dlg.set_title(title)
+
+    if widgets is not None:
+        ca = dlg.get_message_area()
+
+        for widget in widgets:
+            ca.pack_start(widget, False, False, 0)
+
+        ca.show_all()
+
     r = dlg.run()
     dlg.destroy()
+
     return r
 
 
@@ -417,8 +435,7 @@ class LabeledGrid(Gtk.Grid):
         labtxt - текст для Label в левом столбце;
         Возвращает экземпляр Label, дабы можно было его скормить grid.attach_next_to()."""
 
-        lbl = Gtk.Label(labtxt)
-        lbl.set_alignment(self.label_xalign, self.label_yalign)
+        lbl = create_aligned_label(labtxt, self.label_xalign, self.label_yalign)
         lbl.set_use_underline(True)
 
         self.attach_next_to(lbl, self.currow, Gtk.PositionType.BOTTOM, 1, 1)
@@ -438,6 +455,8 @@ class LabeledGrid(Gtk.Grid):
 
         self.attach_next_to(box, self.curcol, Gtk.PositionType.RIGHT, cols, rows)
         self.curcol = widget
+
+        return widget
 
 
 def __clear_entry_by_icon(entry, iconpos, event):
@@ -693,6 +712,16 @@ class ZipFileResourceLoader(FileResourceLoader):
 
 if __name__ == '__main__':
     print('[test]')
+
+    grid = LabeledGrid()
+    grid.append_row('text text text test:')
+    grid.append_col(create_aligned_label('text', 1.0), True)
+    grid.append_row('text text test:')
+    grid.append_col(create_aligned_label('text2', 1.0), True)
+
+    msg_dialog(None, 'Dialog', 'Fuuu...', Gtk.MessageType.OTHER, widgets=(grid,))
+
+    exit(0)
 
     window = Gtk.ApplicationWindow(Gtk.WindowType.TOPLEVEL)
     window.connect('destroy', lambda w: Gtk.main_quit())

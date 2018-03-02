@@ -71,6 +71,8 @@ class Database():
         if self.connection is None:
             self.connection = sqlite3.connect(self.dbfilename)
             self.cursor = self.connection.cursor()
+            self.cursor.executescript('''PRAGMA synchronous=OFF;
+                PRAGMA journal_mode=MEMORY;''')
 
             self.connection.create_function('ulower', 1, sqlite_ulower)
 
@@ -125,6 +127,46 @@ class Database():
 
         self.init_tables()
 
+    def get_table_count(self, tabname, whereparam=''):
+        """Возвращает количество строк в таблице.
+
+        whereparm - строка с условиями (параметры для WHERE)
+                    или пустая строка."""
+
+        q = 'SELECT count(*) FROM %s%s;' %\
+            (tabname, '' if whereparam == '' else ' WHERE %s' % whereparam)
+        cur = self.cursor.execute(q)
+
+        r = cur.fetchone()
+        return 0 if r is None else r[0]
+
+    def get_table_dif_count(self, tabname1, tabname2, colname1, colname2=None):
+        """Возвращает количество несовпадающих строк
+        в таблицах table1 и table2.
+        Проверка ведётся по столбцам tabname1.colname1 и tabname2.colname2.
+        Если значение colname2 == None, то считается, что названия
+        столбцов в таблицах совпадают."""
+
+        if not colname2:
+            colname2 = colname1
+
+        return self.get_table_count(tabname1,
+            '%s NOT IN (SELECT %s FROM %s)' % (colname1, colname2, tabname2))
+
 
 if __name__ == '__main__':
     print('[test]')
+
+    db = Database(':memory:')
+    db.connect()
+    try:
+        db.cursor.executescript('''CREATE TABLE moo(v INTEGER PRIMARY KEY);
+            INSERT INTO moo(v) VALUES (1),(2);
+            CREATE TABLE boo(u INTEGER PRIMARY KEY);
+            INSERT INTO boo(u) VALUES (2);''')
+
+        print(db.get_table_count('moo'))
+        print(db.get_table_dif_count('moo', 'boo', 'v', 'u'))
+
+    finally:
+        db.disconnect()
