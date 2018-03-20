@@ -25,6 +25,7 @@ import zipfile
 import fblib
 import fbenv
 import os, os.path
+import time
 
 
 INVALID_FN_CHARS = '<>:"/\|?*'
@@ -192,10 +193,18 @@ class BookExtractor():
                                                 dstf.write(srcf.read(iosize))
                                                 remain -= iosize
 
-                                        if packtozip:
-                                            with zipfile.ZipFile(dstfpath + '.zip', 'w', zipfile.ZIP_DEFLATED) as dstarcf:
-                                                dstarcf.write(dstfpath, dstfname)
-                                            os.remove(dstfpath)
+                                    if packtozip:
+                                        zdstfpath = dstfpath + '.zip'
+                                        with zipfile.ZipFile(zdstfpath, 'w', zipfile.ZIP_DEFLATED) as dstarcf:
+                                            dstarcf.write(dstfpath, dstfname)
+                                        os.remove(dstfpath)
+                                        dstfpath = zdstfpath
+
+                                    # а теперь устанавливаем mtime у сохранённого файла
+                                    mtime = time.mktime((znfo.date_time[0], znfo.date_time[1], znfo.date_time[2],
+                                        znfo.date_time[3], znfo.date_time[4], znfo.date_time[5],
+                                        0, 0, 0))
+                                    os.utime(dstfpath, (mtime, mtime))
 
                                     extractedbooks += 1
 
