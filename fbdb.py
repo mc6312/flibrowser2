@@ -103,6 +103,13 @@ class Database():
 
                 self.cursor.execute('''CREATE TABLE IF NOT EXISTS %s(%s)''' % (dbname, dbflds))
 
+    def is_structure_valid(self):
+        """Проверка структуры БД на соответствие описанию в заголовке класса.
+        При наличии несоответсвий возвращает False, иначе возвращает True."""
+
+        # PRAGMA schema.table_info(table-name);
+        return True #!!! доделать!
+
     def reset_tables(self):
         """Удаление и пересоздание таблиц в БД.
         Если поле TABLES не содержит описаний столбцов,

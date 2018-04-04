@@ -334,7 +334,7 @@ class AlphaListChooser(FilterChooser):
             self.selectWhere = 'books.%s=%s' % (self.COLNAMEID,
                 self.lib.sqlite_quote(self.namelist.store.get_value(self.namelist.store.get_iter(rows[0]), self.COL_NAME_ID)))
         else:
-            self.selectedWhere = None
+            self.selectWhere = None
 
         self.do_on_choosed()
 
@@ -462,10 +462,10 @@ class SearchFilterChooser(FilterChooser):
         def get_where_param(self):
             return '' if not self.value else '%s=%d' % (self.colname, self.value)
 
-    FLD_DEFS = (('Имя автора', 'authornames.name', -1, True, SearchFilterStrEntry),
-        ('Название книги', 'books.title', -1, True, SearchFilterStrEntry),
-        ('Название цикла/сериала', 'seriesnames.title', -1, True, SearchFilterStrEntry),
-        ('Id книги', 'books.bookid', 8, False, SearchFilterIntEntry))
+    FLD_DEFS = (('Имя автора', 'authornames.name', -1, -1, True, SearchFilterStrEntry),
+        ('Название книги', 'books.title', -1, -1, True, SearchFilterStrEntry),
+        ('Название цикла/сериала', 'seriesnames.title', -1, -1, True, SearchFilterStrEntry),
+        ('Id книги', 'books.bookid', 8, 12, False, SearchFilterIntEntry))
 
     def __init__(self, lib, onchoosed):
         """Инициализация."""
@@ -483,7 +483,7 @@ class SearchFilterChooser(FilterChooser):
         #
         # поля ввода имени автора, названия книги и т.п.
         #
-        for eix, (labtxt, colname,  cwidth, eexpand, eclass) in enumerate(self.FLD_DEFS):
+        for eix, (labtxt, colname, maxlen, cwidth, eexpand, eclass) in enumerate(self.FLD_DEFS):
             grid.append_row('%s:' % labtxt)
 
             entry = eclass(Gtk.Entry(), colname, self.values_changed)
@@ -491,10 +491,12 @@ class SearchFilterChooser(FilterChooser):
             entry_setup_clear_icon(entry.entry)
             entry.entry.set_activates_default(True)
 
+            if maxlen > 0:
+                entry.entry.set_max_length(maxlen)
+
             if cwidth > 0:
-                entry.entry.set_max_width_chars(cwidth)
+                #entry.entry.set_max_width_chars(cwidth)
                 entry.entry.set_width_chars(cwidth)
-                entry.entry.set_max_length(cwidth)
 
             self.entries.append(entry)
             grid.append_col(entry.entry, expand=eexpand)
@@ -529,7 +531,7 @@ class SearchFilterChooser(FilterChooser):
         #
         grid.append_row('Дата:')
 
-        datehbox = Gtk.VBox(spacing=WIDGET_SPACING)
+        datehbox = Gtk.VBox()#spacing=WIDGET_SPACING)
 
         self.datefromchooser = DateChooser('не старше', ondatechanged=self.datefrom_changed)
         datehbox.pack_start(self.datefromchooser.container, False, False, 0)
@@ -648,10 +650,10 @@ if __name__ == '__main__':
         def fav_clicked():
             print('fav_clicked')
 
-        chooser = AuthorAlphaListChooser(lib, __onchoosed)
-        chooser.onfavoriteclicked = fav_clicked
-        chooser.update()
-        #chooser = SearchFilterChooser(lib, __onchoosed)
+        #chooser = AuthorAlphaListChooser(lib, __onchoosed)
+        #chooser.onfavoriteclicked = fav_clicked
+        #chooser.update()
+        chooser = SearchFilterChooser(lib, __onchoosed)
         window.add(chooser.box)
         window.set_default(chooser.defaultWidget)
 
