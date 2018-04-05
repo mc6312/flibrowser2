@@ -48,7 +48,8 @@ class MainWnd():
     # индексы столбцов в Gtk.ListStore списка книг
     COL_BOOK_ID, COL_BOOK_AUTHOR, COL_BOOK_TITLE, \
     COL_BOOK_SERNO, COL_BOOK_SERIES, \
-    COL_BOOK_DATE, COL_BOOK_AGEICON = range(7)
+    COL_BOOK_DATE, COL_BOOK_AGEICON, \
+    COL_BOOK_FILESIZE, COL_BOOK_FILETYPE = range(9)
 
     CPAGE_AUTHORS, CPAGE_SERIES, CPAGE_SEARCH = range(3)
     PAGE_NAMES = ('authors', 'series', 'search')
@@ -332,11 +333,16 @@ class MainWnd():
                 GObject.TYPE_STRING,# series
                 GObject.TYPE_STRING,# serno
                 GObject.TYPE_STRING,# date
-                Pixbuf),            # иконка "свежести" книги
+                Pixbuf,             # иконка "свежести" книги
+                GObject.TYPE_STRING,# filesize
+                GObject.TYPE_STRING,# filetype
+                ),
             (TreeViewer.ColDef(self.COL_BOOK_AUTHOR, 'Автор', False, True, tooltip=self.COL_BOOK_AUTHOR),
                 TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True, tooltip=self.COL_BOOK_TITLE),
                 TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
                 TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True),
+                TreeViewer.ColDef(self.COL_BOOK_FILESIZE, 'Размер', False, False, 1.0),
+                TreeViewer.ColDef(self.COL_BOOK_FILETYPE, 'Тип', False, False),
                 (TreeViewer.ColDef(self.COL_BOOK_AGEICON, 'Дата', tooltip=self.COL_BOOK_SERIES),
                  TreeViewer.ColDef(self.COL_BOOK_DATE))
                  )
@@ -831,7 +837,7 @@ class MainWnd():
 
         if self.selectWhere is not None:
             # получаем список книг
-            q = '''SELECT books.bookid,books.title,serno,seriesnames.title,date,authornames.name
+            q = '''SELECT books.bookid,books.title,serno,seriesnames.title,date,authornames.name,filesize,filetype
                 FROM books
                 INNER JOIN seriesnames ON seriesnames.serid=books.serid
                 INNER JOIN authornames ON authornames.authorid=books.authorid
@@ -858,7 +864,7 @@ class MainWnd():
                 flds = filterfields(r[0], r[1], r[2], r[3],
                     # подразумеваятся, что в соотв. поле БД точно есть хоть какая-то дата
                     datetime.datetime.strptime(r[4], DB_DATE_FORMAT),
-                    r[5])
+                    r[5], r[6], r[7])
 
                 #
                 # дальше работаем ТОЛЬКО с полями flds, про список r забываем
@@ -881,7 +887,9 @@ class MainWnd():
                     str(flds.serno) if flds.serno > 0 else '', # serno
                     flds.sertitle, # seriesnames.title
                     datestr, # date
-                    dateicon
+                    dateicon, # age pixbuf
+                    kilobytes_str(flds.filesize),
+                    '?' if not flds.filetype else flds.filetype.upper()
                     ))
 
         self.booklist.view.set_model(self.booklist.store)

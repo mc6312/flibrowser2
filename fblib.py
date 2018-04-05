@@ -32,6 +32,10 @@ import os.path
 from collections import namedtuple
 
 
+def kilobytes_str(n):
+    return u'%gk' % round(n / 1024.0, 1)
+
+
 class LibraryDB(Database):
     TABLE_FAVORITE_AUTHORS = 'favorite_authors'
     TABLE_FAVORITE_SERIES = 'favorite_series'

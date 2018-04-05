@@ -35,13 +35,15 @@ from fbdb import DB_DATE_FORMAT
 from fblib import LibraryDB
 
 
-filterfields = namedtuple('filterfields', 'bookid title serno sertitle date authorname')
+filterfields = namedtuple('filterfields', 'bookid title serno sertitle date authorname filesize filetype')
 """bookid   целое; идентификатор книги, primary key в таблице books
 title       строка; название книги
 serno       целое; номер в цикле/сериале
 sertitle    строка; название цикла или сериала
 date        datetime.date; дата добавления книги в библиотеку
-authorname  строка; имя автора (авторов)."""
+authorname  строка; имя автора (авторов)
+filesize    целое; размер файла в байтах
+filetype    строка; расширение имени файла/формат файла."""
 
 FILTER_FIELD_BOOKID, FILTER_FIELD_TITLE, FILTER_FIELD_SERNO, \
     FILTER_FIELD_SERTITLE, FILTER_FIELD_DATE, FILTER_FIELD_AUTHORNAME = range(6)
