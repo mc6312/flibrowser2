@@ -25,6 +25,7 @@ from fbinpx import INPXFile
 #from fbsqlgenlist import import_genre_list_mysqldump
 import sqlite3
 import datetime
+from collections import namedtuple
 
 
 DB_DATE_FORMAT = '%Y-%m-%d'
@@ -39,17 +40,46 @@ def sqlite_ulower(s):
 class Database():
     """Тупая обёртка над sqlite3.Connection.
 
-    TABLES  - список или кортеж, содержащий описания таблиц БД -
-              кортежи из двух или трёх элементов вида
-              ('имя таблицы', 'типы столбцов'[, dontreset]),
-              где 'типы столбцов' - строка с перечислением типов
-              столбцов в синтаксисе sqlite3,
-              а dontreset - булевское значение, влияющее на работу
-              метода reset_tables().
-              Это поле используется методами init_tables()
-              и reset_tables(), и должно быть перекрыто классом-потомком."""
+    Поля класса:
+    DB_VERSION  - целое, версия схемы БД;
+                  Это поле должно быть перекрыто классом-потомком.
+    TABLES      - список или кортеж, содержащий описания таблиц БД -
+                  экземпляры Database.tabdef.
+                  Это поле используется методами init_tables()
+                  reset_tables() и is_structure_valid(),
+                  и должно быть перекрыто классом-потомком.
 
+    Поля экземпляра класса:
+    dbfilename      - путь к файлу БД
+    connection      - экземпляр sqlite3.connection (присваивается из .connect())
+    cursor          - курсор
+    vacuumOnInit    - булевское значение: сжимать ли БД при инициализации;
+                      потом когда-нито будет меняться из настроек, если понадобится.
+    dbversion       - целое, значение поля user_version из файла БД (см. описание
+                      PRAGMA user_version в документации по Sqlite 3);
+                      берется из БД при соединении с оной;
+                      сохраняется в БД при вызове reset_tables()
+                      или при вызове set_db_version(),
+                      при обоих вызовах этому полю предварительно
+                      присваивается значение поля класса DB_VERSION."""
+
+    tabdef = namedtuple('tabdef', 'tname cols dontreset')
+    """Описание таблицы.
+
+    tname       - строка, имя таблицы,
+    cols        - список или кортеж экземпляров Database.coldef,
+    dontreset   - булевское значение, влияющее на работу метода reset_tables()."""
+
+    coldef = namedtuple('coldef', 'cname ctype')
+    """Описание столбца таблицы.
+
+    cname    - строка, имя столбца,
+    ctype    - строка, тип столбца в синтаксисе sqlite3
+               (напр. "INTEGER PRIMARY KEY")."""
+
+    DB_VERSION = 0
     TABLES = ()
+
 
     def __init__(self, dbfname):
         """Инициализация.
@@ -59,6 +89,7 @@ class Database():
         self.connection = None # будет присвоено из .connect()
         self.cursor = None # --//--
         self.vacuumOnInit = False # потом когда-нито будет меняться из настроек, если понадобится
+        self.dbversion = 0 # будет изменено при вызове .connect()!
 
     def connect(self):
         """Соединение с БД.
@@ -66,7 +97,7 @@ class Database():
         В нём применён не шибко быстрый костыль для регистронезависимого
         сравнения строковых значений в SELECT'ах.
         Т.е. в запросах д.б. "WHERE ulower(field)=value"
-        и value тоже должно быть приведено к нижнему регистру"""
+        и value тоже должно быть приведено к нижнему регистру."""
 
         if self.connection is None:
             self.connection = sqlite3.connect(self.dbfilename)
@@ -75,6 +106,12 @@ class Database():
                 PRAGMA journal_mode=MEMORY;''')
 
             self.connection.create_function('ulower', 1, sqlite_ulower)
+
+            r = self.cursor.execute('PRAGMA user_version;')
+            if r is None:
+                self.dbversion = 0
+            else:
+                self.dbversion = r.fetchone()[0]
 
     def disconnect(self):
         """Завершение соединения с БД.
@@ -95,20 +132,18 @@ class Database():
         if self.connection is None:
             raise Exception('%s.init_tables(): БД не подключена!' % self.__class__.__name__)
         else:
-            for ixp, dbparms in enumerate(self.TABLES):
-                if len(dbparms) not in (2, 3):
-                    raise ValueError('%s.init_tables(): неправильное количество элементов списка параметров таблицы #%d' % (self.__class__.__name__, ixp))
+            for tabparam in self.TABLES:
+                dbflds = ','.join(map(lambda cd: '%s %s' % (cd.cname, cd.ctype), tabparam.cols))
+                self.cursor.execute('''CREATE TABLE IF NOT EXISTS %s(%s)''' % (tabparam.tname, dbflds))
 
-                dbname, dbflds = dbparms[:2]
+    def set_db_version(self):
+        """Принудительная установка self.dbversion и сохранение значения в БД."""
 
-                self.cursor.execute('''CREATE TABLE IF NOT EXISTS %s(%s)''' % (dbname, dbflds))
-
-    def is_structure_valid(self):
-        """Проверка структуры БД на соответствие описанию в заголовке класса.
-        При наличии несоответсвий возвращает False, иначе возвращает True."""
-
-        # PRAGMA schema.table_info(table-name);
-        return True #!!! доделать!
+        if self.connection is None:
+            raise Exception('%s.set_db_version(): БД не подключена!' % self.__class__.__name__)
+        else:
+            self.dbversion = self.DB_VERSION
+            self.cursor.execute('PRAGMA user_version=%d;' % self.dbversion)
 
     def reset_tables(self):
         """Удаление и пересоздание таблиц в БД.
@@ -131,6 +166,8 @@ class Database():
 
             if self.vacuumOnInit:
                 self.connection.execute('VACUUM;')
+
+            self.set_db_version()
 
         self.init_tables()
 
@@ -164,12 +201,18 @@ class Database():
 if __name__ == '__main__':
     print('[test]')
 
-    db = Database(':memory:')
+    class TestDatabase(Database):
+        TABLES = (Database.tabdef('moo', (Database.coldef('v', 'INTEGER PRIMARY KEY'),), False),
+            Database.tabdef('boo', (Database.coldef('u', 'INTEGER PRIMARY KEY'),), False),
+            )
+
+    db = TestDatabase(':memory:')
     db.connect()
     try:
-        db.cursor.executescript('''CREATE TABLE moo(v INTEGER PRIMARY KEY);
-            INSERT INTO moo(v) VALUES (1),(2);
-            CREATE TABLE boo(u INTEGER PRIMARY KEY);
+        db.init_tables()
+        print('dbversion = %d (must be %d)' % (db.dbversion, db.DB_VERSION))
+
+        db.cursor.executescript('''INSERT INTO moo(v) VALUES (1),(2);
             INSERT INTO boo(u) VALUES (2);''')
 
         print(db.get_table_count('moo'))

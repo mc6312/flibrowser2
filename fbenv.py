@@ -145,7 +145,10 @@ class Environment():
 class Settings(Database):
     """Работа с БД настроек"""
 
-    TABLES = (('settings', 'name TEXT PRIMARY KEY, value TEXT'),)
+    TABLES = (Database.tabdef('settings',
+        (Database.coldef('name', 'TEXT PRIMARY KEY'),
+        Database.coldef('value', 'TEXT'),),
+        False),)
 
     def __init__(self, env):
         """Инициализация.

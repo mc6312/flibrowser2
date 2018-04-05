@@ -478,8 +478,10 @@ class MainWnd():
             chooser.update()
 
     def check_startup_environment(self):
-        """Проверка на первый запуск и, при необходимости, первоначальная настройка.
-        Также проверка на устарелость индексного файла (.inpx).
+        """Проверки:
+        - на первый запуск и, при необходимости, первоначальная настройка;
+        - на устарелость индексного файла (.inpx);
+        - на соответствие версии БД в файле и текущей версии БД в программе;
         При необходимости - импорт индексного файла."""
 
         needImport = False
@@ -495,10 +497,26 @@ class MainWnd():
             # которые есть и чего-то содержат - их не трогаем
             self.lib.init_tables()
 
-        if not needImport:
-            # если на предыдущем шаге необходимость импорта не выявлена -
-            # дополнительно проверяем наличие и mtime индексного файла
+        E_NON_ACTUAL = 'Импорт индексного файла отменён, работа с неактуальным содержимым БД недопустима.'
 
+        # проверяем соответствие версий БД в файле и в программе
+        if not needImport:
+            needImport = self.lib.dbversion != self.lib.DB_VERSION
+
+            if needImport:
+                print('Версия БД изменена (в файле - %d, текущая - %d), необходим повторный импорт индексного файла библиотеки.' %\
+                    (self.lib.dbversion, self.lib.DB_VERSION))
+
+                if msg_dialog(self.window, 'Внимание!',
+                        'Версия базы данных отличается от текущей.\nНеобходим повторный импорт индексного файла библиотеки.',
+                        buttons=Gtk.ButtonsType.OK_CANCEL) != Gtk.ResponseType.OK:
+
+                    print(E_NON_ACTUAL)
+                    exit(1)
+
+        # если на предыдущем шаге необходимость импорта не выявлена -
+        # дополнительно проверяем наличие и mtime индексного файла
+        if not needImport:
             inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
             inpxTStamp = get_file_timestamp(inpxFileName)
 
@@ -506,13 +524,13 @@ class MainWnd():
                 inpxStoredTStamp = self.cfg.get_param_int(self.cfg.IMPORT_INPX_INDEX_TIMESTAMP, 0)
 
                 if inpxStoredTStamp == 0 or inpxStoredTStamp != inpxTStamp:
-                    print('Индексный файл изменён, необходим его импорт.')
+                    print('Индексный файл библиотеки изменён, необходим его импорт.')
 
                     if msg_dialog(self.window, 'Внимание!',
                             'Индексный файл библиотеки ("%s") изменён.\nНеобходим его импорт.' %\
                             os.path.split(inpxFileName)[1],
                             buttons=Gtk.ButtonsType.OK_CANCEL) != Gtk.ResponseType.OK:
-                        print('Импорт индексного файла отменён, работа с неактуальным содержимым БД недопустима.')
+                        print(E_NON_ACTUAL)
                         exit(1)
 
                     needImport = True

@@ -36,7 +36,7 @@ class LibraryDB(Database):
     TABLE_FAVORITE_AUTHORS = 'favorite_authors'
     TABLE_FAVORITE_SERIES = 'favorite_series'
 
-    __FAVORITE_FIELDS = 'name TEXT PRIMARY KEY'
+    __FAVORITE_FIELDS = (Database.coldef('name', 'TEXT PRIMARY KEY'),)
 
     favorite_params = namedtuple('favorite_params', 'favtablename libtablename libtablecolname')
     """favtablename     - имя таблицы favorite_* БД,
@@ -49,37 +49,72 @@ class LibraryDB(Database):
     FAVORITE_SERIES_PARAMS = favorite_params(TABLE_FAVORITE_SERIES,
         'seriesnames', 'title')
 
+    DB_VERSION = 1
+
     TABLES = (# главная таблица - список книг
-        ('books', '''bookid INTEGER PRIMARY KEY,
-authorid INTEGER,
-title VARCHAR(100), serid INTEGER, serno INTEGER,
-filename VARCHAR(256), filetype VARCHAR(16),
-date VARCHAR(10), language VARCHAR(2), keywords VARCHAR(128),
-bundleid INTEGER'''),
+        Database.tabdef('books',
+            (Database.coldef('bookid', 'INTEGER PRIMARY KEY'),
+            Database.coldef('authorid', 'INTEGER'),
+            Database.coldef('title', 'VARCHAR(100)'),
+            Database.coldef('serid', 'INTEGER'),
+            Database.coldef('serno', 'INTEGER'),
+            Database.coldef('filename', 'VARCHAR(256)'),
+            Database.coldef('filetype', 'VARCHAR(16)'),
+            Database.coldef('filesize', 'INTEGER'),
+            Database.coldef('date', 'VARCHAR(10)'),
+            Database.coldef('language', 'VARCHAR(2)'),
+            Database.coldef('keywords', 'VARCHAR(128)'),
+            Database.coldef('bundleid', 'INTEGER')),
+            False),
         # таблица имён авторов
-        ('authornames', '''authorid INTEGER PRIMARY KEY, alpha VARCHAR(1), name VARCHAR(100)'''),
+        Database.tabdef('authornames',
+            (Database.coldef('authorid', 'INTEGER PRIMARY KEY'),
+            Database.coldef('alpha', 'VARCHAR(1)'),
+            Database.coldef('name', 'VARCHAR(100)')),
+            False),
         # первые символы имён авторов
-        ('authornamealpha', '''alpha VARCHAR(1) PRIMARY KEY'''),
+        Database.tabdef('authornamealpha',
+            (Database.coldef('alpha', 'VARCHAR(1) PRIMARY KEY'),),
+            False),
         # таблица названий циклов/сериалов
-        ('seriesnames', '''serid INTEGER PRIMARY KEY, alpha VARCHAR(1), title VARCHAR(100)'''),
+        Database.tabdef('seriesnames',
+            (Database.coldef('serid', 'INTEGER PRIMARY KEY'),
+            Database.coldef('alpha', 'VARCHAR(1)'),
+            Database.coldef('title', 'VARCHAR(100)')),
+            False),
         # первые символы названий циклов/сериалов
-        ('seriesnamealpha', '''alpha VARCHAR(1) PRIMARY KEY'''),
+        Database.tabdef('seriesnamealpha',
+            (Database.coldef('alpha', 'VARCHAR(1) PRIMARY KEY'),),
+            False),
         # таблица тэгов
-        ('genretags', '''genreid INTEGER PRIMARY KEY, tag VARCHAR(64)'''),
+        Database.tabdef('genretags',
+            (Database.coldef('genreid', 'INTEGER PRIMARY KEY'),
+            Database.coldef('tag', 'VARCHAR(64)')),
+            False),
         # таблица соответствий жанровых тэгов книжкам
         # таблица genres - БЕЗ primary key!
-        ('genres', '''genreid INTEGER, bookid INTEGER'''),
+        Database.tabdef('genres',
+            (Database.coldef('genreid', 'INTEGER'),
+            Database.coldef('bookid', 'INTEGER')),
+            False),
         # таблица человекочитаемых названий для тэгов
-        ('genrenames', '''tag VARCHAR(64), name VARCHAR(128), category VARCHAR(128)'''),
+        Database.tabdef('genrenames',
+            (Database.coldef('tag', 'VARCHAR(64)'),
+            Database.coldef('name', 'VARCHAR(128)'),
+            Database.coldef('category', 'VARCHAR(128)')),
+            False),
         # таблица имён файлов архивов с книгами
-        ('bundles', '''bundleid INTEGER PRIMARY KEY, filename VARCHAR(256)'''),
+        Database.tabdef('bundles',
+            (Database.coldef('bundleid', 'INTEGER PRIMARY KEY'),
+            Database.coldef('filename', 'VARCHAR(256)')),
+            False),
         #
         # "нестираемые" таблицы - не очищаются при импорте библиотеки
         #
         # таблица имён избранных авторов
-        (TABLE_FAVORITE_AUTHORS, __FAVORITE_FIELDS, True),
+        Database.tabdef(TABLE_FAVORITE_AUTHORS, __FAVORITE_FIELDS, True),
         # таблица названий избранных циклов/сериалов
-        (TABLE_FAVORITE_SERIES, __FAVORITE_FIELDS, True),
+        Database.tabdef(TABLE_FAVORITE_SERIES, __FAVORITE_FIELDS, True),
         )
 
     def sqlite_quote(self, s):
@@ -327,11 +362,12 @@ class INPXImporter(INPXFile):
         # насчет 'insert or replace' см. выше в комментарии к методу!
         self.library.cursor.execute('''INSERT OR REPLACE INTO books(bookid, authorid,
 title, serid, serno,
-filename, filetype, date, language, keywords, bundleid) VALUES (?,?,?,?,?,?,?,?,?,?,?);''',
+filename, filetype, filesize,
+date, language, keywords, bundleid) VALUES (?,?,?,?,?,?,?,?,?,?,?,?);''',
             (bookid, authorid,
             record[INPXFile.REC_TITLE],
             serid, record[INPXFile.REC_SERNO],
-            record[INPXFile.REC_FILE], record[INPXFile.REC_EXT],
+            record[INPXFile.REC_FILE], record[INPXFile.REC_EXT], record[INPXFile.REC_SIZE],
             record[INPXFile.REC_DATE].strftime(DB_DATE_FORMAT),
             record[INPXFile.REC_LANG], record[INPXFile.REC_KEYWORDS],
             bundleid))
