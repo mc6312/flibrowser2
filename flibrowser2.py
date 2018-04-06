@@ -21,8 +21,9 @@
 
 from fbgtk import *
 
-from gi.repository import Gtk, Gdk, GObject, Pango, GLib
+from gi.repository import Gtk, Gdk, GObject, Pango
 from gi.repository.GdkPixbuf import Pixbuf
+from gi.repository.GLib import markup_escape_text
 
 from fbcommon import *
 from fbenv import *
@@ -337,12 +338,12 @@ class MainWnd():
                 GObject.TYPE_STRING,# filesize
                 GObject.TYPE_STRING,# filetype
                 ),
-            (TreeViewer.ColDef(self.COL_BOOK_AUTHOR, 'Автор', False, True, tooltip=self.COL_BOOK_AUTHOR),
-                TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True, tooltip=self.COL_BOOK_TITLE),
+            (TreeViewer.ColDef(self.COL_BOOK_AUTHOR, 'Автор', False, True, markup=True, tooltip=self.COL_BOOK_AUTHOR),
+                TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True, markup=True, tooltip=self.COL_BOOK_TITLE),
                 TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
-                TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True),
-                TreeViewer.ColDef(self.COL_BOOK_FILESIZE, 'Размер', False, False, 1.0),
-                TreeViewer.ColDef(self.COL_BOOK_FILETYPE, 'Тип', False, False),
+                TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True, markup=True),
+                TreeViewer.ColDef(self.COL_BOOK_FILESIZE, 'Размер', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
+                TreeViewer.ColDef(self.COL_BOOK_FILETYPE, 'Тип', False, False, tooltip=self.COL_BOOK_SERIES),
                 (TreeViewer.ColDef(self.COL_BOOK_AGEICON, 'Дата', tooltip=self.COL_BOOK_SERIES),
                  TreeViewer.ColDef(self.COL_BOOK_DATE))
                  )
@@ -471,11 +472,20 @@ class MainWnd():
         self.booklistTitlePattern = ''
 
         # создаём междумордие
+        self.cfg.lock()
         self.__create_ui()
+        self.cfg.unlock()
 
         self.check_startup_environment()
 
         self.update_choosers()
+
+        # выбор ранее запомненной страницы выбиральника
+        npage = self.cfg.get_param_int(self.cfg.MAIN_WINDOW_CHOOSER_PAGE, 0)
+        lastchooser = len(self.choosers) - 1
+        if npage > lastchooser:
+            npage = lastchooser
+        self.chooserpages.set_current_page(npage)
 
     def update_choosers(self):
         """Обновление потрохов экземпляров FilterChooser после обновления БД"""
@@ -661,6 +671,8 @@ class MainWnd():
     def chooser_page_switched(self, nbook, page, pagenum):
         self.curChooser = self.choosers[pagenum]
         self.curChooser.do_on_choosed()
+
+        self.cfg.set_param_int(self.cfg.MAIN_WINDOW_CHOOSER_PAGE, pagenum)
 
         self.window.set_default(self.curChooser.defaultWidget)
 
@@ -875,6 +887,7 @@ class MainWnd():
                 #
                 if self.booklistTitlePattern:
                     if flds.title.lower().find(self.booklistTitlePattern) < 0 \
+                        and flds.authorname.lower().find(self.booklistTitlePattern) < 0 \
                         and flds.sertitle.lower().find(self.booklistTitlePattern) < 0:
                         continue
 
@@ -882,10 +895,10 @@ class MainWnd():
                 datestr = flds.date.strftime(DISPLAY_DATE_FORMAT)
 
                 self.booklist.store.append((flds.bookid,
-                    flds.authorname, # authornames.name
-                    flds.title, # books.title
+                    markup_escape_text(flds.authorname, -1), # authornames.name
+                    markup_escape_text(flds.title, -1), # books.title
                     str(flds.serno) if flds.serno > 0 else '', # serno
-                    flds.sertitle, # seriesnames.title
+                    markup_escape_text(flds.sertitle, -1), # seriesnames.title
                     datestr, # date
                     dateicon, # age pixbuf
                     kilobytes_str(flds.filesize),
@@ -905,6 +918,9 @@ class MainWnd():
         См. документацию по GTK."""
 
         key = key.upper()
+
+        if model.get_value(_iter, self.COL_BOOK_AUTHOR).upper().find(key) >= 0:
+            return False
 
         if model.get_value(_iter, self.COL_BOOK_TITLE).upper().find(key) >= 0:
             return False

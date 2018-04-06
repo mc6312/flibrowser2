@@ -157,6 +157,8 @@ class Settings(Database):
 
         super().__init__(env.configFilePath)
 
+        self.lockcnt = 0 # костыль для блокировки записи в настройки во время инициализации UI
+
     # параметры библиотеки
     # каталог с архивами книг
     LIBRARY_DIRECTORY = 'inpx_directory'
@@ -189,6 +191,8 @@ class Settings(Database):
     MAIN_WINDOW_MAXIMIZED = 'main_window_maximized'
     # положение разделителя панелей основного окна
     MAIN_WINDOW_HPANED_POS = 'main_window_hpaned_pos'
+    # номер активной вкладки панели выбора
+    MAIN_WINDOW_CHOOSER_PAGE = 'main_window_chooser_page'
 
     __REQUIRED_PARAMETERS = (LIBRARY_DIRECTORY, IMPORT_INPX_INDEX)
 
@@ -209,6 +213,13 @@ class Settings(Database):
 
     def unload(self):
         self.disconnect()
+
+    def lock(self):
+        self.lockcnt += 1
+
+    def unlock(self):
+        if self.lockcnt > 0:
+            self.lockcnt -= 1
 
     def get_param(self, vname, defvalue=''):
         """Получение параметра из БД настроек.
@@ -250,6 +261,10 @@ class Settings(Database):
 
         vname   - имя параметра,
         vvalue  - значение параметра."""
+
+        # костыль для блокировки сохранения настроек во время инициализации UI
+        if self.lockcnt > 0:
+            return
 
         self.cursor.execute('INSERT OR REPLACE INTO settings (name, value) VALUES(?,?);',
             (vname, vvalue))

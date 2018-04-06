@@ -533,7 +533,7 @@ class SearchFilterChooser(FilterChooser):
         #
         grid.append_row('Дата:')
 
-        datehbox = Gtk.VBox()#spacing=WIDGET_SPACING)
+        datehbox = Gtk.VBox(spacing=WIDGET_SPACING)
 
         self.datefromchooser = DateChooser('не старше', ondatechanged=self.datefrom_changed)
         datehbox.pack_start(self.datefromchooser.container, False, False, 0)

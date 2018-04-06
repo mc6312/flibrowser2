@@ -555,7 +555,7 @@ class DateChooser():
 
         self.dropbtn = Gtk.Button('')
         self.dropbtn.connect('clicked', lambda b: self.choose_date())
-        self.container.pack_start(self.dropbtn, False, False, 0)
+        self.container.pack_end(self.dropbtn, False, False, 0)
 
         self.dcdialog = DateChooserDialog(None, labtxt)
         self.date = self.dcdialog.date
