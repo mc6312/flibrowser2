@@ -246,9 +246,6 @@ class MainWnd():
         self.mnuFavoriteAuthors = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteAuthors').get_submenu()
         self.mnuFavoriteSeries = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteSeries').get_submenu()
 
-        self.update_favorite_authors()
-        self.update_favorite_series()
-
         #
         # морда будет из двух вертикальных панелей
         #
@@ -480,6 +477,9 @@ class MainWnd():
 
         self.update_choosers()
 
+        self.update_favorite_authors()
+        self.update_favorite_series()
+
         # выбор ранее запомненной страницы выбиральника
         npage = self.cfg.get_param_int(self.cfg.MAIN_WINDOW_CHOOSER_PAGE, 0)
         lastchooser = len(self.choosers) - 1
@@ -508,10 +508,10 @@ class MainWnd():
                 exit(1) #!!!
             else:
                 needImport = True
-        else:
-            # создание (при необходимости) отсутствующих таблиц
-            # которые есть и чего-то содержат - их не трогаем
-            self.lib.init_tables()
+
+        # создание (при необходимости) отсутствующих таблиц
+        # которые есть и чего-то содержат - их не трогаем
+        self.lib.init_tables()
 
         E_NON_ACTUAL = 'Импорт индексного файла отменён, работа с неактуальным содержимым БД недопустима.'
 
@@ -949,8 +949,8 @@ def main():
             print('соединение с БД')
             lib.connect()
             try:
-                if not dbexists:
-                    lib.init_tables()
+                #if not dbexists:
+                #    lib.init_tables()
 
                 print('запуск UI')
                 mainwnd = MainWnd(lib, env, cfg)

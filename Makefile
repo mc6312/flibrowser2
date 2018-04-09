@@ -8,6 +8,7 @@ srcarcname = $(basename)-src$(arcx)
 backupdir = ~/shareddocs/pgm/python/
 zipname = $(basename).zip
 srcs = __main__.py $(basename).py fb*.py *.svg COPYING
+version = $(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')
 
 app:
 	zip -9 $(zipname) $(srcs)
@@ -20,7 +21,7 @@ archive:
 distrib:
 	make app
 	make icon
-	$(pack) $(basename)-$(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')$(arcx) $(basename) $(docs) $(basename).ico
+	$(pack) $(basename)-$(version)$(arcx) $(basename) $(docs) $(basename).ico
 icon:
 	convert $(basename).svg $(basename).ico
 backup:
@@ -29,7 +30,7 @@ backup:
 update:
 	$(packer) x -y $(backupdir)$(srcarcname)
 commit:
-	git commit -a -uno -m "$(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')"
+	git commit -a -uno -m "$(version)"
 	# не, push вручную, ибо ваистену
 	#git push
 docview:
