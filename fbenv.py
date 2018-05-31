@@ -65,62 +65,88 @@ class Environment():
         #
         # разгребаем командную строку
         #
-        ENV_DETECT, ENV_APPDIR, ENV_HOME = range(3)
+        ENV_DETECT, ENV_APPDIR, ENV_HOME, ENV_CUSTOM = range(4)
 
         envmode = ENV_DETECT
+        oldarg = ''
+        customdir = ''
 
         for aix, arg in enumerate(sys.argv[1:], 1):
-            if arg == '--app-dir' or arg == '-A':
-                envmode = ENV_APPDIR
-            elif arg == '--home-dir' or arg == '-H':
-                envmode = ENV_HOME
+            if arg.startswith('-'):
+                if arg == '--app-dir' or arg == '-A':
+                    envmode = ENV_APPDIR
+                elif arg == '--home-dir' or arg == '-H':
+                    envmode = ENV_HOME
+                elif arg == '--custom-dir' or arg == '-C':
+                    envmode = ENV_CUSTOM
+                else:
+                    raise EnvironmentError('Параметр #%d ("%s") командной строки не поддерживается' % (aix, arg))
+
+                oldarg = arg
             else:
-                raise EnvironmentError('Параметр #%d ("%s") командной строки не поддерживается' % (aix, arg))
+                if envmode != ENV_CUSTOM:
+                    raise EnvironmentError('Параметр "%s" не требует аргументов' % oldarg)
+                else:
+                    if customdir:
+                        raise EnvironmentError('В командной строке указан ненужный параметр')
+
+                    customdir = arg
 
         # пытаемся определить, из откудова работать
 
-        # сначала ищем рядом с самой софтиной
-        self.configFilePath = os.path.join(self.appDir, self.CONFIG_FILE_NAME)
-        if (envmode == ENV_APPDIR) or (envmode == ENV_DETECT and os.path.exists(self.configFilePath)):
-            # нашелся или указан принидительно - считаем, что там и есть
-            # рабочий каталог, и библиотека должна лежать там же
+        if envmode == ENV_CUSTOM:
+            # БД и настройки - в произвольно указанном каталоге
+            if not customdir:
+                raise EnvironmentError('В командной строке есть параметр --custom-dir, но соответствующий каталог не указан')
 
-            self.dataDir = self.appDir
-            self.configDir = self.appDir
-
+            self.dataDir = customdir
+            self.configDir = customdir
         else:
-            # иначе ищем (или создаём) каталоги в недрах $HOME
+            # сначала ищем рядом с самой софтиной
+            self.configFilePath = os.path.join(self.appDir, self.CONFIG_FILE_NAME)
+            if (envmode == ENV_APPDIR) or (envmode == ENV_DETECT and os.path.exists(self.configFilePath)):
+                # нашелся или указан принидительно - считаем, что там и есть
+                # рабочий каталог, и библиотека должна лежать там же
 
-            sysname = system_name()
-            if sysname == 'Windows':
-                self.configDir = os.path.join(os.environ['APPDATA'], self.SUBDIR_NAME)
-                self.dataDir = self.configDir
-                # валим конфиг и библиотеку в один каталог
-                # вообще _как бы_ полагается не совсем так, но у M$ линия партии очень уж извилиста,
-                # и работа flibrowser2 под виндой у меня далеко не на первом месте
+                self.dataDir = self.appDir
+                self.configDir = self.appDir
+
             else:
-                if sysname != 'Linux':
-                    print('Warning! Unsupported platform!', file=sys.stderr)
+                # иначе ищем (или создаём) каталоги в недрах $HOME
 
-                # как это будет (если будет) работать под MacOS или *BSD - меня не колышет
-                # теоретически, под Linux надо бы каталоги узнавать через
-                # функции поддержки XDG, но это лишняя зависимость
-                # и один фиг в массовых дистрибутивах это ~/.config/ и ~/.local/share/
-                self.configDir = os.path.expanduser('~/.config/%s' % self.SUBDIR_NAME)
-                self.dataDir = os.path.expanduser('~/.local/share/%s' % self.SUBDIR_NAME)
+                sysname = system_name()
+                if sysname == 'Windows':
+                    self.configDir = os.path.join(os.environ['APPDATA'], self.SUBDIR_NAME)
+                    self.dataDir = self.configDir
+                    # валим конфиг и библиотеку в один каталог
+                    # вообще _как бы_ полагается не совсем так, но у M$ линия партии очень уж извилиста,
+                    # и работа flibrowser2 под виндой у меня далеко не на первом месте
+                else:
+                    if sysname != 'Linux':
+                        print('Warning! Unsupported platform!', file=sys.stderr)
 
-            # теперь создаём каталоги, если их нет
-            if not os.path.exists(self.configDir):
-                os.makedirs(self.configDir)
+                    # как это будет (если будет) работать под MacOS или *BSD - меня не колышет
+                    # теоретически, под Linux надо бы каталоги узнавать через
+                    # функции поддержки XDG, но это лишняя зависимость
+                    # и один фиг в массовых дистрибутивах это ~/.config/ и ~/.local/share/
+                    self.configDir = os.path.expanduser('~/.config/%s' % self.SUBDIR_NAME)
+                    self.dataDir = os.path.expanduser('~/.local/share/%s' % self.SUBDIR_NAME)
 
-            if not os.path.exists(self.dataDir):
-                os.makedirs(self.dataDir)
+        # теперь создаём каталоги, если их нет
+        if not os.path.exists(self.configDir):
+            os.makedirs(self.configDir)
 
-            self.configFilePath = os.path.join(self.configDir, self.CONFIG_FILE_NAME)
+        if not os.path.exists(self.dataDir):
+            os.makedirs(self.dataDir)
+
+        self.configFilePath = os.path.join(self.configDir, self.CONFIG_FILE_NAME)
 
         # определяем пути к файлам
         # (точнее, self.configFilePath уже известен)
         self.libraryFilePath = os.path.join(self.dataDir, self.LIBRARY_FILE_NAME)
+
+        # костыльный файл для проверки на повторный запуск программы
+        self.lockFilePath = os.path.join(self.dataDir, '.lock')
 
         print('''файл БД настроек:   %s
 файл БД библиотеки: %s''' % (self.configFilePath, self.libraryFilePath))

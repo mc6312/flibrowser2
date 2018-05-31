@@ -103,7 +103,8 @@ class Database():
             self.connection = sqlite3.connect(self.dbfilename)
             self.cursor = self.connection.cursor()
             self.cursor.executescript('''PRAGMA synchronous=OFF;
-                PRAGMA journal_mode=MEMORY;''')
+                PRAGMA journal_mode=MEMORY;
+                PRAGMA locking_mode=EXCLUSIVE;''')
 
             self.connection.create_function('ulower', 1, sqlite_ulower)
 

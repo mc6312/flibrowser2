@@ -939,26 +939,36 @@ def main():
         env = Environment()
         cfg = Settings(env)
 
-        cfg.load()
+        if os.path.exists(env.lockFilePath):
+            raise EnvironmentError('Программа %s уже запущена' % TITLE)
+
+        with open(env.lockFilePath, 'w+') as lockf:
+            lockf.write('%s\n' % os.getpid())
+
         try:
-            #inpxFileName = cfg.get_param(cfg.IMPORT_INPX_INDEX)
-            #genreNamesFile = cfg.get_param(cfg.GENRE_NAMES_PATH)
-
-            dbexists = os.path.exists(env.libraryFilePath)
-            lib = LibraryDB(env.libraryFilePath)
-            print('соединение с БД')
-            lib.connect()
+            cfg.load()
             try:
-                #if not dbexists:
-                #    lib.init_tables()
+                #inpxFileName = cfg.get_param(cfg.IMPORT_INPX_INDEX)
+                #genreNamesFile = cfg.get_param(cfg.GENRE_NAMES_PATH)
 
-                print('запуск UI')
-                mainwnd = MainWnd(lib, env, cfg)
-                mainwnd.main()
+                dbexists = os.path.exists(env.libraryFilePath)
+                lib = LibraryDB(env.libraryFilePath)
+                print('соединение с БД')
+                lib.connect()
+                try:
+                    #if not dbexists:
+                    #    lib.init_tables()
+
+                    print('запуск UI')
+                    mainwnd = MainWnd(lib, env, cfg)
+                    mainwnd.main()
+                finally:
+                    lib.disconnect()
             finally:
-                lib.disconnect()
+                cfg.unload()
         finally:
-            cfg.unload()
+            if os.path.exists(env.lockFilePath):
+                os.remove(env.lockFilePath)
     except Exception as ex:
         msg_dialog(None, '%s: ошибка' % TITLE, str(ex), Gtk.MessageType.ERROR)
         raise ex
