@@ -450,24 +450,39 @@ class SearchFilterChooser(FilterChooser):
             #v.lower()
             return 'ulower(%s) LIKE "%%%s%%"' % (self.colname, self.value)
 
+        @staticmethod
+        def str_to_valid_int(s):
+            i = int(s)
+
+            return i if i > 0 else None
+
     class SearchFilterIntEntry(SearchFilterStrEntry):
         def validate_value(self, s):
             try:
-                v = int(s)
-                if v <= 0:
-                    return None
-                else:
-                    return v
+                return self.str_to_valid_int(s)
             except ValueError:
                 return None
 
         def get_where_param(self):
             return '' if not self.value else '%s=%d' % (self.colname, self.value)
 
+    class SearchFilterIntListEntry(SearchFilterStrEntry):
+        def validate_value(self, s):
+            try:
+                l = list(filter(None, map(self.str_to_valid_int, s.split(None))))
+
+                return None if not l else l
+            except ValueError:
+                return None
+
+        def get_where_param(self):
+            return '' if not self.value else '%s IN (%s)' % (self.colname, ','.join(map(str, self.value)))
+
     FLD_DEFS = (('Имя автора', 'authornames.name', -1, -1, True, SearchFilterStrEntry),
         ('Название книги', 'books.title', -1, -1, True, SearchFilterStrEntry),
         ('Название цикла/сериала', 'seriesnames.title', -1, -1, True, SearchFilterStrEntry),
-        ('Id книги', 'books.bookid', 8, 12, False, SearchFilterIntEntry))
+        ('Id книги', 'books.bookid', -1, -1, True, SearchFilterIntListEntry))
+        #('Id книги', 'books.bookid', 8, 12, False, SearchFilterIntEntry))
 
     def __init__(self, lib, onchoosed):
         """Инициализация."""

@@ -470,14 +470,20 @@ class MainWnd():
 
         # создаём междумордие
         self.cfg.lock()
+        #print('calling __create_ui()')
         self.__create_ui()
+        #print('__create_ui() is called')
         self.cfg.unlock()
 
+        #print('check_startup_environment()')
         self.check_startup_environment()
 
+        #print('update_choosers()')
         self.update_choosers()
 
+        #print('update_favorite_authors()')
         self.update_favorite_authors()
+        #print('update_favorite_series()')
         self.update_favorite_series()
 
         # выбор ранее запомненной страницы выбиральника
@@ -486,6 +492,7 @@ class MainWnd():
         if npage > lastchooser:
             npage = lastchooser
         self.chooserpages.set_current_page(npage)
+        #print('__init__() end')
 
     def update_choosers(self):
         """Обновление потрохов экземпляров FilterChooser после обновления БД"""
