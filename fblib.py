@@ -45,13 +45,20 @@ class LibraryDB(Database):
     favorite_params = namedtuple('favorite_params', 'favtablename libtablename libtablecolname')
     """favtablename     - имя таблицы favorite_* БД,
     libtablename        - имя таблицы БД, по которой выполняется запрос (authornames или seriesnames),
-    libtablecolname     - имя столбца вышеуказанной таблицы, по которому выполняется запрос."""
+    libtablecolname     - имя столбца вышеуказанной таблицы, по которому выполняется запрос;
+                          Внимание! В таблице favorite_* соотв. столбец в любом случае называется name."""
 
     FAVORITE_AUTHORS_PARAMS = favorite_params(TABLE_FAVORITE_AUTHORS,
         'authornames', 'name')
 
     FAVORITE_SERIES_PARAMS = favorite_params(TABLE_FAVORITE_SERIES,
         'seriesnames', 'title')
+
+    __SQL_CLEANUP_FAVORITE = lambda par: 'DELETE FROM %s WHERE %s.name NOT IN (SELECT %s.%s FROM %s);' % \
+        (par.favtablename, par.favtablename,
+         par.libtablename, par.libtablecolname, par.libtablename)
+
+    SQL_CLEANUP_FAVORITES = '\n'.join(map(__SQL_CLEANUP_FAVORITE, (FAVORITE_AUTHORS_PARAMS, FAVORITE_SERIES_PARAMS)))
 
     DB_VERSION = 1
 
@@ -170,6 +177,12 @@ class LibraryDB(Database):
         return '%s.%s=%s' % (favparams.libtablename,
             favparams.libtablecolname,
             self.sqlite_quote(value))
+
+    def cleanup_favorites(self):
+        """Очистка списков избранного от имен, отсутствующих в БД
+        (например, после очередного импорта)."""
+
+        self.cursor.executescript(self.SQL_CLEANUP_FAVORITES);
 
 
 class StrHashIdDict():

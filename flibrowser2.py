@@ -580,87 +580,101 @@ class MainWnd():
                 buttons=Gtk.ButtonsType.YES_NO) != Gtk.ResponseType.YES:
                     return
 
-        self.task_begin(S_IMPORT)
         try:
-            self.lib.cursor.executescript('''CREATE TEMPORARY TABLE oldbookids(bookid INTEGER PRIMARY KEY);
-                CREATE TEMPORARY TABLE oldauthorids(authorid INTEGER PRIMARY KEY);''')
+            self.task_begin(S_IMPORT)
             try:
-                # список books.bookid ДО импорта
-                self.lib.cursor.executescript('''INSERT OR REPLACE INTO oldbookids(bookid) SELECT bookid FROM books;
-                    INSERT OR REPLACE INTO oldauthorids(authorid) SELECT authorid FROM authornames;''')
+                self.lib.cursor.executescript('''CREATE TEMPORARY TABLE oldbookids(bookid INTEGER PRIMARY KEY);
+                    CREATE TEMPORARY TABLE oldauthorids(authorid INTEGER PRIMARY KEY);''')
+                try:
+                    # список books.bookid ДО импорта
+                    self.lib.cursor.executescript('''INSERT OR REPLACE INTO oldbookids(bookid) SELECT bookid FROM books;
+                        INSERT OR REPLACE INTO oldauthorids(authorid) SELECT authorid FROM authornames;''')
 
-                print('Инициализация БД (%s)...' % self.env.libraryFilePath)
-                self.task_msg('Инициализация БД')
-                self.lib.reset_tables()
+                    print('Инициализация БД (%s)...' % self.env.libraryFilePath)
+                    self.task_msg('Инициализация БД')
+                    self.lib.reset_tables()
 
-                inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
-                print('Импорт индекса библиотеки "%s"...' % inpxFileName)
-                self.task_msg('Импорт индекса библиотеки')
+                    inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
+                    print('Импорт индекса библиотеки "%s"...' % inpxFileName)
+                    self.task_msg('Импорт индекса библиотеки')
 
-                importer = INPXImporter(self.lib, self.cfg)
-                importer.import_inpx_file(inpxFileName, self.task_progress)
+                    importer = INPXImporter(self.lib, self.cfg)
+                    importer.import_inpx_file(inpxFileName, self.task_progress)
 
-                # импорт успешен, ничего не упало, можно дальше изгаляться
-                # а если выскочило исключение, то один фиг нижеследующе не выполнится
+                    # импорт успешен, ничего не упало, можно дальше изгаляться
+                    # а если выскочило исключение, то один фиг нижеследующе не выполнится
 
-                # обновляем в БД настроек параметр с timestamp'ом индексного файла
-                self.cfg.set_param_int(self.cfg.IMPORT_INPX_INDEX_TIMESTAMP,
-                    get_file_timestamp(inpxFileName))
+                    # обновляем в БД настроек параметр с timestamp'ом индексного файла
+                    self.cfg.set_param_int(self.cfg.IMPORT_INPX_INDEX_TIMESTAMP,
+                        get_file_timestamp(inpxFileName))
 
-                # собираем некоторую статистику
+                    # чистим списки избранного - лежавших там авторов и сериалов может не быть
+                    # в свежей БД
+                    __CLEANUP_FAVS = 'Удаление устаревших записей из списков избранного'
+                    print(__CLEANUP_FAVS)
+                    self.task_msg(__CLEANUP_FAVS)
+                    self.lib.cleanup_favorites()
+                    self.update_favorite_authors()
+                    self.update_favorite_series()
 
-                # получаем количества новых и удалённых книг
-                booksTotal = self.get_total_book_count()
-                booksNew = self.lib.get_table_dif_count('books', 'oldbookids', 'bookid')
-                booksDeleted = self.lib.get_table_dif_count('oldbookids', 'books', 'bookid')
+                    # собираем некоторую статистику
 
-                # получаем количество удалённых книг
-                authorsTotal = self.lib.get_table_count('authornames')
-                authorsNew = self.lib.get_table_dif_count('authornames', 'oldauthorids', 'authorid')
-                authorsDeleted = self.lib.get_table_dif_count('oldauthorids', 'authornames', 'authorid')
+                    # получаем количества новых и удалённых книг
+                    booksTotal = self.get_total_book_count()
+                    booksNew = self.lib.get_table_dif_count('books', 'oldbookids', 'bookid')
+                    booksDeleted = self.lib.get_table_dif_count('oldbookids', 'books', 'bookid')
 
-                print('''Книги:  импортировано   %d
-        добавлено новых %d
-        удалено         %d
-Авторы: всего           %d
-        добавлено       %d
-        удалено         %d''' % (booksTotal,
-                    booksNew, booksDeleted,
-                    authorsTotal,
-                    authorsNew, authorsDeleted))
+                    # получаем количество удалённых книг
+                    authorsTotal = self.lib.get_table_count('authornames')
+                    authorsNew = self.lib.get_table_dif_count('authornames', 'oldauthorids', 'authorid')
+                    authorsDeleted = self.lib.get_table_dif_count('oldauthorids', 'authornames', 'authorid')
 
-                if any((booksNew, booksDeleted, authorsNew, authorsDeleted)):
-                    # если после импорта чего-то изменилось - показываем окно со статистикой
-                    stgrid = LabeledGrid()
+                    print('''Книги:  импортировано   %d
+            добавлено новых %d
+            удалено         %d
+    Авторы: всего           %d
+            добавлено       %d
+            удалено         %d''' % (booksTotal,
+                        booksNew, booksDeleted,
+                        authorsTotal,
+                        authorsNew, authorsDeleted))
 
-                    def add_counter(t, v):
-                        stgrid.append_row(t)
-                        stgrid.append_col(create_aligned_label('%d' % v, 1.0), True)
+                    if any((booksNew, booksDeleted, authorsNew, authorsDeleted)):
+                        # если после импорта чего-то изменилось - показываем окно со статистикой
+                        stgrid = LabeledGrid()
 
-                    if booksNew:
-                        add_counter('Добавлено книг:', booksNew)
+                        def add_counter(t, v):
+                            stgrid.append_row(t)
+                            stgrid.append_col(create_aligned_label('%d' % v, 1.0), True)
 
-                    if booksDeleted:
-                        add_counter('Удалено книг:', booksDeleted)
+                        if booksNew:
+                            add_counter('Добавлено книг:', booksNew)
 
-                    if authorsNew:
-                        add_counter('Добавлено авторов:', authorsNew)
+                        if booksDeleted:
+                            add_counter('Удалено книг:', booksDeleted)
 
-                    if authorsDeleted:
-                        add_counter('Удалено авторов:', authorsDeleted)
+                        if authorsNew:
+                            add_counter('Добавлено авторов:', authorsNew)
 
-                    msg_dialog(self.window, 'Импорт библиотеки',
-                        'Импорт библиотеки завершён.', Gtk.MessageType.OTHER,
-                        widgets=(Gtk.HSeparator(), stgrid))
+                        if authorsDeleted:
+                            add_counter('Удалено авторов:', authorsDeleted)
+
+                        msg_dialog(self.window, 'Импорт библиотеки',
+                            'Импорт библиотеки завершён.', Gtk.MessageType.OTHER,
+                            widgets=(Gtk.HSeparator(), stgrid))
+
+                finally:
+                    self.lib.cursor.executescript('''DROP TABLE IF EXISTS oldbookids;
+                        DROP TABLE IF EXISTS oldauthorids;''')
+
+                self.update_choosers()
 
             finally:
-                self.lib.cursor.executescript('''DROP TABLE IF EXISTS oldbookids;
-                    DROP TABLE IF EXISTS oldauthorids;''')
+                self.task_end()
 
-            self.update_choosers()
-
-        finally:
-            self.task_end()
+        except Exception as ex:
+            msg_dialog(self.window, 'Ошибка', str(ex), Gtk.MessageType.ERROR)
+            raise ex
 
     def random_book_choice(self):
         """Случайный выбор книги"""
