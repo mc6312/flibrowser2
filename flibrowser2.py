@@ -207,6 +207,10 @@ class MainWnd():
                 #
                 ('booksSearch', Gtk.STOCK_FIND, 'Искать',
                     '<Control>f', 'Искать книги в библиотеке', lambda b: self.search_books()),
+                ('booksSearchMenu', None, 'Искать...', None, None, None),
+                    ('booksSearchAuthor', None, 'Искать этого автора', None, None, lambda b: self.search_this_author()),
+                    ('booksSearchTitle', None, 'Искать с таким же названием книги', None, None, lambda b: self.search_this_title()),
+                    ('booksSearchSeries', None, 'Искать этот цикл/сериал', None, None, lambda b: self.search_this_series()),
                 ('booksFavoriteAuthors', None, 'Избранные авторы', None, None, None),
                 ('booksFavoriteSeries', None, 'Избранные сериалы/циклы', None, None, None),
             ))
@@ -224,6 +228,11 @@ class MainWnd():
                 </menu>
                 <menu name="mnuBooks" action="books">
                     <menuitem name="mnuBooksSearch" action="booksSearch"/>
+                    <menu name="mnuBooksSearchMenu" action="booksSearchMenu">
+                        <menuitem name="mnuBooksSearchByAuthor" action="booksSearchAuthor"/>
+                        <menuitem name="mnuBooksSearchByTitle" action="booksSearchTitle"/>
+                        <menuitem name="mnuBooksSearchBySeries" action="booksSearchSeries"/>
+                    </menu>
                     <menuitem name="mnuBooksRandomChoice" action="booksRandomChoice"/>
                     <menuitem name="mnuBooksExtract" action="booksExtract"/>
                     <separator />
@@ -245,6 +254,9 @@ class MainWnd():
 
         self.mnuFavoriteAuthors = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteAuthors').get_submenu()
         self.mnuFavoriteSeries = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteSeries').get_submenu()
+
+        # контекстное меню поиска по полям из списка найденных книг
+        self.mnuBooksSearchMenu = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksSearchMenu').get_submenu()
 
         #
         # морда будет из двух вертикальных панелей
@@ -350,7 +362,11 @@ class MainWnd():
 
         #print(self.booklist.colmap)
 
+        # для всплывающих подсказок, зависящих от столбца
         self.booklist.view.connect('motion-notify-event', self.booklist_mouse_moved)
+        # для контекстного меню
+        self.booklist.view.connect('button-press-event', self.booklist_button_pressed)
+        self.booklist.view.connect('key-press-event', self.booklist_key_pressed)
 
         self.booklist.selection.set_mode(Gtk.SelectionMode.MULTIPLE)
         self.booklist.selection.connect('changed', self.booklist_selected)
@@ -778,6 +794,26 @@ class MainWnd():
         self.booklistTitlePattern = entry.get_text().strip().lower()
         self.update_books()
 
+    def booklist_context_menu(self, event):
+        # вываливаем контекстное меню только при непустом списке найденных книг
+        # и при условии, что хотя бы один элемент списка выбран
+        if self.booklist.store.iter_n_children(None) > 0 and self.booklist.selection.get_selected_rows()[1]:
+            self.mnuBooksSearchMenu.popup_at_pointer(event)
+
+    def booklist_button_pressed(self, widget, event):
+        if event.button == 3: # правая кнопка мыша
+            self.booklist_context_menu(event)
+            return True
+
+        return False
+
+    def booklist_key_pressed(self, widget, event):
+        if event.keyval == Gdk.KEY_Menu:
+            self.booklist_context_menu(event)
+            return True
+
+        return False
+
     def booklist_mouse_moved(self, lv, event):
         r = self.booklist.view.get_path_at_pos(event.x, event.y)
         if r is not None:
@@ -802,6 +838,8 @@ class MainWnd():
                 self.booksSelected.append(self.booklist.store.get_value(self.booklist.store.get_iter(row), self.COL_BOOK_ID))
 
         nselbooks = len(self.booksSelected)
+
+        self.mnuBooksSearchMenu.set_sensitive(nselbooks > 0)
 
         self.set_widgets_sensitive((self.btnextract, self.mnuitemExtractBooks), nselbooks > 0)
         #
@@ -847,6 +885,38 @@ class MainWnd():
         """Поиск книг по нескольким полям."""
 
         self.chooserpages.set_current_page(self.CPAGE_SEARCH)
+
+    def search_by_selected_column(self, liststorecol, entryfldid):
+        """Заполнение поля ввода с номером entryfldid
+        (SearchFilterChooser.FLD_xxx) содержимым столбца
+        из booklist.store с номером liststorecol и переключение
+        на панель поиска по текстовым полям."""
+
+        # выясняем строку в списке, на который курсор, а не просто выбранную (т.к. м.б. множественный выбор)
+        path = self.booklist.view.get_cursor()[0]
+        if path is not None:
+            fldv = self.booklist.store.get_value(self.booklist.store.get_iter(path), liststorecol)
+
+            entry = self.choosers[self.CPAGE_SEARCH].entries[entryfldid].entry
+
+            entry.set_text(fldv)
+            self.chooserpages.set_current_page(self.CPAGE_SEARCH)
+            entry.grab_focus()
+
+    def search_this_author(self):
+        """Поиск книг с тем же именем автора"""
+
+        self.search_by_selected_column(self.COL_BOOK_AUTHOR, SearchFilterChooser.FLD_AUTHORNAME)
+
+    def search_this_title(self):
+        """Поиск книг с тем же названием книги"""
+
+        self.search_by_selected_column(self.COL_BOOK_TITLE, SearchFilterChooser.FLD_BOOKTITLE)
+
+    def search_this_series(self):
+        """Поиск книг с тем же названием цикла/сериала"""
+
+        self.search_by_selected_column(self.COL_BOOK_SERIES, SearchFilterChooser.FLD_SERTITLE)
 
     def update_books_by_chooser(self):
         self.selectWhere = self.curChooser.selectWhere
