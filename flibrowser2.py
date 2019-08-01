@@ -130,7 +130,7 @@ class MainWnd():
         self.windowMaximized = False
         self.windowStateLoaded = False
 
-        self.window = Gtk.ApplicationWindow(Gtk.WindowType.TOPLEVEL)
+        self.window = Gtk.ApplicationWindow()
         self.window.connect('configure_event', self.wnd_configure_event)
         self.window.connect('window_state_event', self.wnd_state_event)
         self.window.connect('destroy', self.destroy)
@@ -187,7 +187,7 @@ class MainWnd():
         # Gtk.Builder и уёбищным говноблёвом под названием Glade пользоваться не буду
         #
 
-        actions = Gtk.ActionGroup('ui')
+        actions = Gtk.ActionGroup.new('ui')
         actions.add_actions(
             # action-name,stock-id,label,accel,toltip,callback
             (('file', None, 'Файл', None, None, None),
@@ -306,7 +306,7 @@ class MainWnd():
             if chooser.RANDOM:
                 self.rndchoosers.append(chooser)
 
-            lab = Gtk.Label('_%s: %s' % (fastlabel.__next__(), chooserclass.LABEL))
+            lab = Gtk.Label.new('_%s: %s' % (fastlabel.__next__(), chooserclass.LABEL))
             lab.set_use_underline(True)
 
             self.chooserpages.append_page(chooser.box, lab)
@@ -324,7 +324,7 @@ class MainWnd():
         # в правой панели - список книг соотв. автора и управление распаковкой
         #
 
-        self.bookcount = Gtk.Label('0')
+        self.bookcount = Gtk.Label.new('0')
         bookframe, bl = create_labeled_frame('_%s. Книги:' % fastlabel.__next__(), self.bookcount)
         self.roothpaned.pack2(bookframe, True, False)
 
@@ -384,7 +384,7 @@ class MainWnd():
         # панель с виджетами извлечения книг
         #
 
-        self.selbookcount = Gtk.Label('0')
+        self.selbookcount = Gtk.Label.new('0')
         extractframe, efl = create_labeled_frame('_%s. Выбрано книг:' % fastlabel.__next__(), self.selbookcount)
 
         xfbox = Gtk.HBox(spacing=WIDGET_SPACING)
@@ -394,12 +394,12 @@ class MainWnd():
         self.ctlvbox.pack_start(extractframe, False, False, 0)
 
         # внезапно, кнопка
-        self.btnextract = Gtk.Button('Извлечь')
+        self.btnextract = Gtk.Button.new_with_label('Извлечь')
         self.btnextract.connect('clicked', lambda b: self.extract_books())
         xfbox.pack_start(self.btnextract, False, False, 0)
 
         # выбор каталога
-        xfbox.pack_start(Gtk.Label('в каталог'), False, False, 0)
+        xfbox.pack_start(Gtk.Label.new('в каталог'), False, False, 0)
         self.destdirchooser = Gtk.FileChooserButton.new('Выбор каталога для извлечения книг', Gtk.FileChooserAction.SELECT_FOLDER)
 
         #!!!!
@@ -412,7 +412,7 @@ class MainWnd():
         xfbox.pack_start(self.destdirchooser, True, True, 0)
 
         # как обзывать файлы
-        xfbox.pack_start(Gtk.Label(', назвав файлы по образцу'), False, False, 0)
+        xfbox.pack_start(Gtk.Label.new(', назвав файлы по образцу'), False, False, 0)
 
         self.extractfntemplatecb = Gtk.ComboBoxText()
         for fntplix, fntpl in enumerate(fbfntemplate.templates):
@@ -423,7 +423,7 @@ class MainWnd():
 
         xfbox.pack_start(self.extractfntemplatecb, True, True, 0)
 
-        self.extracttozipbtn = Gtk.CheckButton('и сжать ZIP')
+        self.extracttozipbtn = Gtk.CheckButton.new_with_label('и сжать ZIP')
         self.extracttozipbtn.set_active(self.cfg.get_param_bool(self.cfg.EXTRACT_PACK_ZIP, False))
         self.extracttozipbtn.connect('clicked', self.extracttozipbtn_clicked)
 
@@ -565,18 +565,21 @@ class MainWnd():
                 if inpxStoredTStamp == 0 or inpxStoredTStamp != inpxTStamp:
                     print('Индексный файл библиотеки изменён, необходим его импорт.')
 
-                    if msg_dialog(self.window, 'Внимание!',
-                            'Индексный файл библиотеки ("%s") изменён.\nНеобходим его импорт.' %\
+                    """if msg_dialog(self.window, 'Внимание!',
+                            '''Индексный файл библиотеки ("%s") изменён.
+Необходим его импорт.
+"OK"\t- импортировать индексный файл,
+"Отмена"\t- завершить работу программы''' %\
                             os.path.split(inpxFileName)[1],
                             buttons=Gtk.ButtonsType.OK_CANCEL) != Gtk.ResponseType.OK:
                         print(E_NON_ACTUAL)
-                        exit(1)
+                        exit(1)"""
 
                     needImport = True
             # если inpxTStamp == 0 - индексного файла попросту нет, нечего импортировать
 
         if needImport:
-            self.import_library()
+            self.import_library(False) # в этой ситуации всегда импортируем без спросу
 
     def import_library(self, askconfirm=False, xtramsg=''):
         """Процедура импорта библиотеки.
@@ -591,7 +594,7 @@ class MainWnd():
 
         if askconfirm:
             if msg_dialog(self.window, S_IMPORT,
-                '%sИмпорт библиотеки может быть долгим.\nПродолжить?' %\
+                '%sИмпорт библиотеки может быть долгим.\n"Да" - импортировать библиотеку,\n"Нет" - завершить работу.' %\
                     ('' if not xtramsg else '%s\n\n' % xtramsg),
                 buttons=Gtk.ButtonsType.YES_NO) != Gtk.ResponseType.YES:
                     return
@@ -640,7 +643,7 @@ class MainWnd():
                     booksNew = self.lib.get_table_dif_count('books', 'oldbookids', 'bookid')
                     booksDeleted = self.lib.get_table_dif_count('oldbookids', 'books', 'bookid')
 
-                    # получаем количество удалённых книг
+                    # получаем количество новых и удалённых авторов
                     authorsTotal = self.lib.get_table_count('authornames')
                     authorsNew = self.lib.get_table_dif_count('authornames', 'oldauthorids', 'authorid')
                     authorsDeleted = self.lib.get_table_dif_count('oldauthorids', 'authornames', 'authorid')
