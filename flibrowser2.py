@@ -50,7 +50,7 @@ class MainWnd():
     COL_BOOK_ID, COL_BOOK_AUTHOR, COL_BOOK_TITLE, \
     COL_BOOK_SERNO, COL_BOOK_SERIES, \
     COL_BOOK_DATE, COL_BOOK_AGEICON, \
-    COL_BOOK_FILESIZE, COL_BOOK_FILETYPE = range(9)
+    COL_BOOK_FILESIZE, COL_BOOK_ID_STR, COL_BOOK_FILETYPE = range(10)
 
     CPAGE_AUTHORS, CPAGE_SERIES, CPAGE_SEARCH = range(3)
     PAGE_NAMES = ('authors', 'series', 'search')
@@ -345,6 +345,7 @@ class MainWnd():
                 GObject.TYPE_STRING,# date
                 Pixbuf,             # иконка "свежести" книги
                 GObject.TYPE_STRING,# filesize
+                GObject.TYPE_STRING,# bookid as str
                 GObject.TYPE_STRING,# filetype
                 ),
             (TreeViewer.ColDef(self.COL_BOOK_AUTHOR, 'Автор', False, True, markup=True, tooltip=self.COL_BOOK_AUTHOR),
@@ -352,6 +353,7 @@ class MainWnd():
                 TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
                 TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True, markup=True),
                 TreeViewer.ColDef(self.COL_BOOK_FILESIZE, 'Размер', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
+                TreeViewer.ColDef(self.COL_BOOK_ID_STR, 'Id', False, False, tooltip=self.COL_BOOK_SERIES),
                 TreeViewer.ColDef(self.COL_BOOK_FILETYPE, 'Тип', False, False, tooltip=self.COL_BOOK_SERIES),
                 (TreeViewer.ColDef(self.COL_BOOK_AGEICON, 'Дата', tooltip=self.COL_BOOK_SERIES),
                  TreeViewer.ColDef(self.COL_BOOK_DATE))
@@ -996,6 +998,7 @@ class MainWnd():
                     datestr, # date
                     dateicon, # age pixbuf
                     kilobytes_str(flds.filesize),
+                    str(flds.bookid),
                     '?' if not flds.filetype else flds.filetype.upper()
                     ))
 
