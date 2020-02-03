@@ -1101,6 +1101,12 @@ class MainWnd():
 
 
 def main():
+    env = None
+
+    def remove_lock_file():
+        if env and os.path.exists(env.lockFilePath):
+            os.remove(env.lockFilePath)
+
     def handle_unhandled(exc_type, exc_value, exc_traceback):
         # дабы не зациклиться, если че рухнет в этом обработчике
         sys.excepthook = sys.__excepthook__
@@ -1111,16 +1117,23 @@ def main():
 
         print('** Unhandled exception - %s' % exc_type.__name__)
         for s in snfo:
-            print(dstr, file=sys.stderr)
+            print(s, file=sys.stderr)
 
-        msg_dialog(None, '%s: ошибка' % TITLE_VERSION, '\n'.join(snfo))
+        expander = Gtk.Expander.new_with_mnemonic('Подробнее')
+        etxt = Gtk.Label.new('\n'.join(snfo))
+        expander.add(etxt)
 
+        msg_dialog(None, '%s: ошибка' % TITLE_VERSION,
+            str(exc_value),
+            widgets=(expander,))
+
+        remove_lock_file()
         sys.exit(255)
-
-    sys.excepthook = handle_unhandled
 
     env = Environment()
     cfg = Settings(env)
+
+    sys.excepthook = handle_unhandled
 
     if os.path.exists(env.lockFilePath):
         raise EnvironmentError('Программа %s уже запущена' % TITLE)
@@ -1154,8 +1167,7 @@ def main():
         finally:
             cfg.unload()
     finally:
-        if os.path.exists(env.lockFilePath):
-            os.remove(env.lockFilePath)
+        remove_lock_file()
 
     return 0
 
