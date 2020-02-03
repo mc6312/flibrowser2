@@ -110,9 +110,10 @@ class Database():
 
             r = self.cursor.execute('PRAGMA user_version;')
             if r is None:
-                self.dbversion = 0
+                self.dbversion = self.DB_VERSION
             else:
                 self.dbversion = r.fetchone()[0]
+                #print('dbversion=%d' % self.dbversion)
 
     def disconnect(self):
         """Завершение соединения с БД.
@@ -197,6 +198,33 @@ class Database():
 
         return self.get_table_count(tabname1,
             '%s NOT IN (SELECT %s FROM %s)' % (colname1, colname2, tabname2))
+
+    def get_table_difference_query(self, tabname1, tabname2, colname1, colname2=None, retcols=None):
+        """Генерирует и возвращает строку запроса для выбора несовпадающих
+        строк в таблицах table1 и table2.
+        Проверка ведётся по столбцам tabname1.colname1 и tabname2.colname2.
+        Если значение colname2 == None, то считается, что названия
+        столбцов в таблицах совпадают.
+        retcols - список запрашиваемых SELECT'ом столбцов.
+                  если retcol=None или пустой список - запрашиваются
+                  все столбцы."""
+
+        if not colname2:
+            colname2 = colname1
+
+        rcolstr = '*' if not retcols else '(%s)' % (','.join(retcols))
+
+        return '''SELECT %s
+            FROM %s
+            WHERE %s NOT IN (
+                SELECT %s
+                FROM %s);''' % (rcolstr, tabname1, colname1, colname2, tabname2)
+
+    def select_table_difference(self, tabname1, tabname2, colname1, colname2=None, retcols=None):
+        """Выбирает несовпадающие строки в указанных таблицах.
+        Описание параметров см. в описании метода get_table_difference_query()."""
+
+        self.cursor.execute(self.get_table_difference_query(tabname1, tabname2, colname1, colname2, retcols))
 
 
 if __name__ == '__main__':

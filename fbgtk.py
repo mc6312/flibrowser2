@@ -30,12 +30,14 @@ import cairo
 
 import os.path
 import zipfile
-from sys import stderr
+from sys import stderr, exc_info
 from random import randrange
 from math import pi
 import datetime
 
-from fbcommon import DISPLAY_DATE_FORMAT
+from fbcommon import DISPLAY_DATE_FORMAT, TITLE_VERSION
+
+from traceback import format_exception
 
 # отступы между виджетами, дабы не вырвало от пионерского вида гуя
 
@@ -73,6 +75,24 @@ MENU_ICON_SIZE_PIXELS =  Gtk.IconSize.lookup(Gtk.IconSize.MENU)[1]
 
 iconNonStarred = load_system_icon('non-starred', MENU_ICON_SIZE_PIXELS, True)
 iconStarred = load_system_icon('starred', MENU_ICON_SIZE_PIXELS, True)
+
+
+def get_ui_widgets(builder, names):
+    """Получение списка указанных виджетов.
+    builder     - экземпляр класса Gtk.Builder,
+    names       - список или кортеж имён виджетов.
+    Возвращает список экземпляров Gtk.Widget и т.п."""
+
+    widgets = []
+
+    for wname in names:
+        wgt = builder.get_object(wname)
+        if wgt is None:
+            raise KeyError('get_ui_widgets(): экземпляр Gtk.Builder не содержит виджет с именем "%s"' % wname)
+
+        widgets.append(wgt)
+
+    return widgets
 
 
 def create_scwindow(overlay=False):
@@ -454,7 +474,7 @@ class LabeledGrid(Gtk.Grid):
         box.set_hexpand(True)
 
         self.attach_next_to(box, self.curcol, Gtk.PositionType.RIGHT, cols, rows)
-        self.curcol = widget
+        self.curcol = box
 
         return widget
 
@@ -686,6 +706,14 @@ class FileResourceLoader():
             else:
                 print('Загружаю стандартное изображение "%s"' % fallback, file=stderr)
                 return Gtk.IconTheme.get_default().load_icon(fallback, height, Gtk.IconLookupFlags.FORCE_SIZE)
+
+    def load_gtk_builder(self, filename):
+        """Загружает в память и возвращает экземпляр класса Gtk.Builder.
+        filename - имя файла .ui.
+        При отсутствии файла и прочих ошибках генерируются исключения."""
+
+        uistr = self.load(filename)
+        return Gtk.Builder.new_from_string(str(uistr, 'utf-8'), -1)
 
 
 class ZipFileResourceLoader(FileResourceLoader):

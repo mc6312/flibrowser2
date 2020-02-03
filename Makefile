@@ -7,7 +7,8 @@ arcname = $(basename)$(arcx)
 srcarcname = $(basename)-src$(arcx)
 backupdir = ~/shareddocs/pgm/python/
 zipname = $(basename).zip
-srcs = __main__.py $(basename).py fb*.py *.svg COPYING
+pysrcs = __main__.py $(basename).py fb*.py
+srcs = $(pysrcs) *.svg
 version = $(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')
 
 app:
@@ -40,3 +41,5 @@ docview:
 	@echo "</body></html>" >>$(docname)
 	exo-open $(docname)
 	#rm $(docname)
+todo:
+	pytodo.py $(pysrcs) >TODO

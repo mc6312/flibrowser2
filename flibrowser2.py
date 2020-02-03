@@ -479,6 +479,9 @@ class MainWnd():
         #
         #
 
+        # счетчик блокировок вызовов update_books()
+        self.lockUpdateBooks = 0
+
         # поля для запроса в self.update_books(), заполняются из методов update_books_by_*
         self.bookListUpdateColName = None
         self.bookListUpdateColValue = None
@@ -496,6 +499,8 @@ class MainWnd():
         #print('check_startup_environment()')
         self.check_startup_environment()
 
+        self.lock_update_books()
+
         #print('update_choosers()')
         self.update_choosers()
 
@@ -510,7 +515,16 @@ class MainWnd():
         if npage > lastchooser:
             npage = lastchooser
         self.chooserpages.set_current_page(npage)
+
+        self.unlock_update_books()
         #print('__init__() end')
+
+    def lock_update_books(self):
+        self.lockUpdateBooks += 1
+
+    def unlock_update_books(self):
+        if self.lockUpdateBooks > 0:
+            self.lockUpdateBooks -= 1
 
     def update_choosers(self):
         """Обновление потрохов экземпляров FilterChooser после обновления БД"""
@@ -548,12 +562,12 @@ class MainWnd():
                 print('Версия БД изменена (в файле - %d, текущая - %d), необходим повторный импорт индексного файла библиотеки.' %\
                     (self.lib.dbversion, self.lib.DB_VERSION))
 
-                if msg_dialog(self.window, 'Внимание!',
-                        'Версия базы данных отличается от текущей.\nНеобходим повторный импорт индексного файла библиотеки.',
-                        buttons=Gtk.ButtonsType.OK_CANCEL) != Gtk.ResponseType.OK:
+                #if msg_dialog(self.window, 'Внимание!',
+                #        'Версия базы данных отличается от текущей.\nНеобходим повторный импорт индексного файла библиотеки.',
+                #        buttons=Gtk.ButtonsType.OK_CANCEL) != Gtk.ResponseType.OK:
 
-                    print(E_NON_ACTUAL)
-                    exit(1)
+                #    print(E_NON_ACTUAL)
+                #    exit(1)
 
         # если на предыдущем шаге необходимость импорта не выявлена -
         # дополнительно проверяем наличие и mtime индексного файла
@@ -596,106 +610,163 @@ class MainWnd():
 
         if askconfirm:
             if msg_dialog(self.window, S_IMPORT,
-                '%sИмпорт библиотеки может быть долгим.\n"Да" - импортировать библиотеку,\n"Нет" - завершить работу.' %\
+                '%sИмпорт библиотеки может быть долгим.\n"Да"\t- импортировать библиотеку,\n"Нет"\t- завершить работу.' %\
                     ('' if not xtramsg else '%s\n\n' % xtramsg),
                 buttons=Gtk.ButtonsType.YES_NO) != Gtk.ResponseType.YES:
                     return
 
+        self.task_begin(S_IMPORT)
         try:
-            self.task_begin(S_IMPORT)
+            self.lib.cursor.executescript('''CREATE TEMPORARY TABLE oldbookids(bookid INTEGER PRIMARY KEY);
+                CREATE TEMPORARY TABLE oldauthorids(authorid INTEGER PRIMARY KEY);
+                CREATE TEMPORARY TABLE newbooks(bookid INTEGER PRIMARY KEY, favauthor INTEGER);''')
             try:
-                self.lib.cursor.executescript('''CREATE TEMPORARY TABLE oldbookids(bookid INTEGER PRIMARY KEY);
-                    CREATE TEMPORARY TABLE oldauthorids(authorid INTEGER PRIMARY KEY);''')
-                try:
-                    # список books.bookid ДО импорта
-                    self.lib.cursor.executescript('''INSERT OR REPLACE INTO oldbookids(bookid) SELECT bookid FROM books;
-                        INSERT OR REPLACE INTO oldauthorids(authorid) SELECT authorid FROM authornames;''')
+                # список books.bookid ДО импорта
+                self.lib.cursor.executescript('''INSERT OR REPLACE INTO oldbookids(bookid) SELECT bookid FROM books;
+                    INSERT OR REPLACE INTO oldauthorids(authorid) SELECT authorid FROM authornames;''')
 
-                    print('Инициализация БД (%s)...' % self.env.libraryFilePath)
-                    self.task_msg('Инициализация БД')
-                    self.lib.reset_tables()
+                print('Инициализация БД (%s)...' % self.env.libraryFilePath)
+                self.task_msg('Инициализация БД')
+                self.lib.reset_tables()
 
-                    inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
-                    print('Импорт индекса библиотеки "%s"...' % inpxFileName)
-                    self.task_msg('Импорт индекса библиотеки')
+                inpxFileName = self.cfg.get_param(self.cfg.IMPORT_INPX_INDEX)
+                print('Импорт индекса библиотеки "%s"...' % inpxFileName)
+                self.task_msg('Импорт индекса библиотеки')
 
-                    importer = INPXImporter(self.lib, self.cfg)
-                    importer.import_inpx_file(inpxFileName, self.task_progress)
+                importer = INPXImporter(self.lib, self.cfg)
+                importer.import_inpx_file(inpxFileName, self.task_progress)
 
-                    # импорт успешен, ничего не упало, можно дальше изгаляться
-                    # а если выскочило исключение, то один фиг нижеследующе не выполнится
+                # импорт успешен, ничего не упало, можно дальше изгаляться
+                # а если выскочило исключение, то один фиг нижеследующе не выполнится
 
-                    # обновляем в БД настроек параметр с timestamp'ом индексного файла
-                    self.cfg.set_param_int(self.cfg.IMPORT_INPX_INDEX_TIMESTAMP,
-                        get_file_timestamp(inpxFileName))
+                # обновляем в БД настроек параметр с timestamp'ом индексного файла
+                self.cfg.set_param_int(self.cfg.IMPORT_INPX_INDEX_TIMESTAMP,
+                    get_file_timestamp(inpxFileName))
 
-                    # чистим списки избранного - лежавших там авторов и сериалов может не быть
-                    # в свежей БД
-                    __CLEANUP_FAVS = 'Удаление устаревших записей из списков избранного'
-                    print(__CLEANUP_FAVS)
-                    self.task_msg(__CLEANUP_FAVS)
-                    self.lib.cleanup_favorites()
-                    self.update_favorite_authors()
-                    self.update_favorite_series()
+                # чистим списки избранного - лежавших там авторов и сериалов может не быть
+                # в свежей БД
+                __CLEANUP_FAVS = 'Удаление устаревших записей из списков избранного'
+                print(__CLEANUP_FAVS)
+                self.task_msg(__CLEANUP_FAVS)
+                self.lib.cleanup_favorites()
+                self.update_favorite_authors()
+                self.update_favorite_series()
 
-                    # собираем некоторую статистику
+                # собираем некоторую статистику
 
-                    # получаем количества новых и удалённых книг
-                    booksTotal = self.get_total_book_count()
-                    booksNew = self.lib.get_table_dif_count('books', 'oldbookids', 'bookid')
-                    booksDeleted = self.lib.get_table_dif_count('oldbookids', 'books', 'bookid')
+                # получаем количества новых и удалённых книг
+                booksTotal = self.get_total_book_count()
 
-                    # получаем количество новых и удалённых авторов
-                    authorsTotal = self.lib.get_table_count('authornames')
-                    authorsNew = self.lib.get_table_dif_count('authornames', 'oldauthorids', 'authorid')
-                    authorsDeleted = self.lib.get_table_dif_count('oldauthorids', 'authornames', 'authorid')
+                self.lib.cursor.execute('''INSERT OR REPLACE INTO newbooks(bookid)
+                    %s''' % self.lib.get_table_difference_query('books', 'oldbookids', 'bookid',
+                                                                retcols=('bookid',)))
 
-                    print('''Книги:  импортировано   %d
-            добавлено новых %d
-            удалено         %d
-    Авторы: всего           %d
-            добавлено       %d
-            удалено         %d''' % (booksTotal,
-                        booksNew, booksDeleted,
-                        authorsTotal,
-                        authorsNew, authorsDeleted))
+                booksNew = self.lib.get_table_count('newbooks')
+                booksFavAuthorsNew = 0
 
-                    if any((booksNew, booksDeleted, authorsNew, authorsDeleted)):
-                        # если после импорта чего-то изменилось - показываем окно со статистикой
-                        stgrid = LabeledGrid()
+                if booksNew:
+                    # пытаемся найти новые книги избранных авторов
+                    self.lib.cursor.executescript('''CREATE TEMPORARY TABLE favauthorbooks(bookid INTEGER PRIMARY KEY);
+                        INSERT OR REPLACE INTO favauthorbooks(bookid)
+                            SELECT bookid FROM books
+                                INNER JOIN authornames ON authornames.authorid=books.authorid
+                                INNER JOIN favorite_authors ON favorite_authors.name=authornames.name;
+                        UPDATE newbooks SET favauthor=0;
+                        UPDATE newbooks SET favauthor=1
+                            WHERE newbooks.bookid IN (SELECT bookid FROM favauthorbooks);
+                        DROP TABLE IF EXISTS favauthorbooks;''')
 
-                        def add_counter(t, v):
-                            stgrid.append_row(t)
-                            stgrid.append_col(create_aligned_label('%d' % v, 1.0), True)
+                    booksFavAuthorsNew = self.lib.get_table_count('newbooks', 'favauthor=1')
 
-                        if booksNew:
-                            add_counter('Добавлено книг:', booksNew)
+                booksDeleted = self.lib.get_table_dif_count('oldbookids', 'books', 'bookid')
 
-                        if booksDeleted:
-                            add_counter('Удалено книг:', booksDeleted)
+                # получаем количество новых и удалённых авторов
+                authorsTotal = self.lib.get_table_count('authornames')
+                authorsNew = self.lib.get_table_dif_count('authornames', 'oldauthorids', 'authorid')
+                authorsDeleted = self.lib.get_table_dif_count('oldauthorids', 'authornames', 'authorid')
 
-                        if authorsNew:
-                            add_counter('Добавлено авторов:', authorsNew)
+                print('''Книги:  импортировано           %d
+        добавлено новых всего   %d
+        от избранных авторов    %d
+        удалено                 %d
+Авторы: всего                   %d
+        добавлено               %d
+        удалено                 %d''' % (booksTotal,
+                    booksNew, booksFavAuthorsNew, booksDeleted,
+                    authorsTotal,
+                    authorsNew, authorsDeleted))
 
-                        if authorsDeleted:
-                            add_counter('Удалено авторов:', authorsDeleted)
+                if any((booksNew, booksDeleted, authorsNew, authorsDeleted)):
+                    # если после импорта чего-то изменилось - показываем окно со статистикой
+                    stgrid = LabeledGrid()
 
-                        msg_dialog(self.window, 'Импорт библиотеки',
-                            'Импорт библиотеки завершён.', Gtk.MessageType.OTHER,
-                            widgets=(Gtk.HSeparator(), stgrid))
+                    def add_counter(labtxt, value, withcb=False):
+                        """Добавляет строку со значением в сетку stgrid.
+                        labtxt  - текст метки в первом столбце;
+                        value   - целое значение для второго столбца;
+                        withcb  - булевское значение:
+                                  True, если нужно в третий столбец
+                                  поместить чекбокс.
+                        Возвращает None, если withcb==False, иначе -
+                        экземпляр Gtk.CheckButton."""
 
-                finally:
-                    self.lib.cursor.executescript('''DROP TABLE IF EXISTS oldbookids;
-                        DROP TABLE IF EXISTS oldauthorids;''')
+                        stgrid.append_row(labtxt)
+                        stgrid.append_col(create_aligned_label('%d' % value, 1.0, stgrid.label_yalign), True)
 
-                self.update_choosers()
+                        if withcb:
+                            cbox = Gtk.CheckButton.new_with_label('показать')
+                            stgrid.append_col(cbox, False)
+                        else:
+                            cbox = None
+
+                        return cbox
+
+                    cboxBooksNew = None
+                    cboxBooksNewFromFavAuthors = None
+
+                    if booksNew:
+                        cboxBooksNew = add_counter('Добавлено книг:', booksNew, True)
+
+                        if booksFavAuthorsNew:
+                            cboxBooksNewFromFavAuthors = add_counter('...в т.ч. от избранных авторов:', booksFavAuthorsNew, True)
+
+                    if booksDeleted:
+                        add_counter('Удалено книг:', booksDeleted)
+
+                    if authorsNew:
+                        add_counter('Добавлено авторов:', authorsNew)
+
+                    if authorsDeleted:
+                        add_counter('Удалено авторов:', authorsDeleted)
+
+                    msg_dialog(self.window, 'Импорт библиотеки',
+                        'Импорт библиотеки завершён.', Gtk.MessageType.OTHER,
+                        widgets=(Gtk.HSeparator(), stgrid))
+
+                    # если нажат чекбокс избранных авторов - показываем их новые книги,
+                    # игнорируя чекбокс "все новые книги"
+                    query = None
+                    if cboxBooksNewFromFavAuthors is not None and cboxBooksNewFromFavAuthors.get_active():
+                        query = 'books.bookid IN (SELECT bookid FROM newbooks WHERE newbooks.favauthor=1)'
+                    # иначе, если нажат чекбокс новых книг - показываем ВСЕ новые книги
+                    elif cboxBooksNew is not None and cboxBooksNew.get_active():
+                        query = 'books.bookid IN (SELECT bookid FROM newbooks)'
+
+                    if query:
+                        self.selectWhere = query
+                        self.update_books()
 
             finally:
-                self.task_end()
+                self.lib.cursor.executescript('''DROP TABLE IF EXISTS oldbookids;
+                    DROP TABLE IF EXISTS oldauthorids;
+                    DROP TABLE IF EXISTS newbooks;''')
 
-        except Exception as ex:
-            msg_dialog(self.window, 'Ошибка', str(ex), Gtk.MessageType.ERROR)
-            raise ex
+            self.lock_update_books() # дабы не дёргали update_books()
+            self.update_choosers()
+            self.unlock_update_books()
+
+        finally:
+            self.task_end()
 
     def random_book_choice(self):
         """Случайный выбор книги"""
@@ -928,12 +999,12 @@ class MainWnd():
         self.update_books()
 
     def update_books(self):
-        """Обновление списка книг.
-
-        idcolname   - имя столбца в таблице books для запроса к БД,
-        idcolvalue  - значение столбца для запроса."""
+        """Обновление списка книг."""
 
         if self.booklist is None:
+            return
+
+        if self.lockUpdateBooks:
             return
 
         self.booklist.view.set_model(None)
@@ -942,6 +1013,8 @@ class MainWnd():
         ntotalbooks = self.get_total_book_count()
         stotalbooks = '%d' % ntotalbooks
         nbooks = 0
+
+        #print('%s  update_books(selectWhere is empty: %s)' % (datetime.datetime.now().strftime('%H:%M:%S'), self.selectWhere is None))
 
         if self.selectWhere is not None:
             # получаем список книг
@@ -953,7 +1026,7 @@ class MainWnd():
                 ORDER BY authornames.name, seriesnames.title, serno, books.title, date;'''\
                 % self.selectWhere
 
-            #print(q)
+            #print('update_books() query:', q)
             cur = self.lib.cursor.execute(q)
 
             # для фильтрации по дате можно сделать втык в запрос подобного:
@@ -961,11 +1034,7 @@ class MainWnd():
             # или вручную фильтровать ниже
             datenow = datetime.datetime.now()
 
-            while True:
-                r = cur.fetchone()
-                if r is None:
-                    break
-
+            for r in cur:
                 nbooks += 1
 
                 # 0:bookid 1:title 2:serno 3:sername 4:date 5:authorname
@@ -1032,43 +1101,61 @@ class MainWnd():
 
 
 def main():
+    def handle_unhandled(exc_type, exc_value, exc_traceback):
+        # дабы не зациклиться, если че рухнет в этом обработчике
+        sys.excepthook = sys.__excepthook__
+
+        # логгер у нас тут недоступен - пишем в куда получится
+
+        snfo = format_exception(exc_type, exc_value, exc_traceback)
+
+        print('** Unhandled exception - %s' % exc_type.__name__)
+        for s in snfo:
+            print(dstr, file=sys.stderr)
+
+        msg_dialog(None, '%s: ошибка' % TITLE_VERSION, '\n'.join(snfo))
+
+        sys.exit(255)
+
+    sys.excepthook = handle_unhandled
+
+    env = Environment()
+    cfg = Settings(env)
+
+    if os.path.exists(env.lockFilePath):
+        raise EnvironmentError('Программа %s уже запущена' % TITLE)
+
+    with open(env.lockFilePath, 'w+') as lockf:
+        lockf.write('%s\n' % os.getpid())
+
     try:
-        env = Environment()
-        cfg = Settings(env)
-
-        if os.path.exists(env.lockFilePath):
-            raise EnvironmentError('Программа %s уже запущена' % TITLE)
-
-        with open(env.lockFilePath, 'w+') as lockf:
-            lockf.write('%s\n' % os.getpid())
-
+        cfg.load()
         try:
-            cfg.load()
+            #inpxFileName = cfg.get_param(cfg.IMPORT_INPX_INDEX)
+            #genreNamesFile = cfg.get_param(cfg.GENRE_NAMES_PATH)
+
+            dbexists = os.path.exists(env.libraryFilePath)
+            lib = LibraryDB(env.libraryFilePath)
+            print('соединение с БД')
+            lib.connect()
+            """FIXME когда-нибудь прикрутить проверки на наличие таблиц в БД,
+            дабы не лаялось исключениями на отсутствующие таблицы в ситуациях, когда БД только что
+            создана и ещё не содержит таблиц."""
+            """FIXME переделать проверку на необходимость импорта индекса при пустой БД."""
             try:
-                #inpxFileName = cfg.get_param(cfg.IMPORT_INPX_INDEX)
-                #genreNamesFile = cfg.get_param(cfg.GENRE_NAMES_PATH)
+                if not dbexists:
+                    lib.init_tables()
 
-                dbexists = os.path.exists(env.libraryFilePath)
-                lib = LibraryDB(env.libraryFilePath)
-                print('соединение с БД')
-                lib.connect()
-                try:
-                    #if not dbexists:
-                    #    lib.init_tables()
-
-                    print('запуск UI')
-                    mainwnd = MainWnd(lib, env, cfg)
-                    mainwnd.main()
-                finally:
-                    lib.disconnect()
+                print('запуск UI')
+                mainwnd = MainWnd(lib, env, cfg)
+                mainwnd.main()
             finally:
-                cfg.unload()
+                lib.disconnect()
         finally:
-            if os.path.exists(env.lockFilePath):
-                os.remove(env.lockFilePath)
-    except Exception as ex:
-        msg_dialog(None, '%s: ошибка' % TITLE, str(ex), Gtk.MessageType.ERROR)
-        raise ex
+            cfg.unload()
+    finally:
+        if os.path.exists(env.lockFilePath):
+            os.remove(env.lockFilePath)
 
     return 0
 
