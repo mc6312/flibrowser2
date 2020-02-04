@@ -33,33 +33,22 @@ from fbgtk import *
 
 
 class SetupDialog():
-    def __init__(self, wparent, env, cfg):
+    def __init__(self, env, cfg, uibldr):
         """Инициализация.
 
         env - экземпляр fbenv.Environment,
-        cfg - экземпляр fbenv.Settings."""
+        cfg - экземпляр fbenv.Settings,
+        uibldr - экземпляр Gtk.Builder."""
 
         self.env = env
         self.cfg = cfg
 
         self.settingsChanged = False
 
-        self.dialog = Gtk.Dialog(parent=wparent,
-            flags=Gtk.DialogFlags.MODAL,
-            #use_header_bar=True, # пусть с этим WM/DE возится
-            title='Настройки')
+        self.dialog = uibldr.get_object('dlgSetup')
 
-        #if wparent is not None:
-        #    self.dialog.set_icon(wparent.get_icon())
-
-        #self.dialog.set_size_request(800, 600)
-        self.dialog.add_buttons('gtk-ok', Gtk.ResponseType.OK, 'gtk-cancel', Gtk.ResponseType.CANCEL)
+        # за каким-то фигом Glade именно это не умеет
         self.dialog.set_default_response(Gtk.ResponseType.OK)
-
-        box = self.dialog.get_content_area()
-
-        grid = LabeledGrid()
-        box.pack_start(grid, True, True, 0)
 
         #
         # временное хранение настроек. в БД настроек они будут занесены только
@@ -75,40 +64,22 @@ class SetupDialog():
         #
         #
         #
-        grid.append_row('Каталог, где расположены архивы с книгами:')
 
-        self.libdirchooser = Gtk.FileChooserButton.new('Выбор каталога библиотеки', Gtk.FileChooserAction.SELECT_FOLDER)
-
+        self.libdirchooser = uibldr.get_object('libdirchooser')
         self.libdirchooser.set_filename(self.libraryDirectory)
-        self.libdirchooser.set_create_folders(False)
         #self.libdirchooser.connect('selection-changed', self.lib_dir_changed)
 
-        grid.append_col(self.libdirchooser, True)
-
         #
         #
         #
-        grid.append_row('Файл индекса библиотеки:')
-        self.libindexchooser = Gtk.FileChooserButton.new('Выбор файла индекса библиотеки', Gtk.FileChooserAction.OPEN)
-        self.libindexchooser.set_create_folders(False)
+        self.libindexchooser = uibldr.get_object('libindexchooser')
         self.libindexchooser.set_filename(self.libraryIndexFile)
 
-        inpxfiles = Gtk.FileFilter()
-        inpxfiles.set_name('Файлы индекса (.INPX)')
-        for ptn in ('*.INPX', '*.inpx'):
-            inpxfiles.add_pattern(ptn)
-        self.libindexchooser.add_filter(inpxfiles)
-
-        grid.append_col(self.libindexchooser, True)
-
         #
         #
         #
-        grid.append_row('Допустимые языки:')
-
-        self.liblanguagesentry = Gtk.Entry()
+        self.liblanguagesentry = uibldr.get_object('liblanguagesentry')
         self.liblanguagesentry.set_text(' '.join(self.libraryLanguages))
-        grid.append_col(self.liblanguagesentry, True)
 
     def get_data(self):
         """Забирает значения из виджетов.
@@ -188,15 +159,17 @@ class SetupDialog():
 
 
 if __name__ == '__main__':
-    print('[test]')
+    print('[debugging %s]' % __file__)
 
     import fbenv
 
     env = fbenv.Environment()
     cfg = fbenv.Settings(env)
     cfg.load()
+    ldr = get_resource_loader(env)
+    uibldr = ldr.load_gtk_builder('flibrowser2.ui')
     try:
-        dlg = SetupDialog(None, env, cfg)
+        dlg = SetupDialog(env, cfg, uibldr)
         print(dlg.run())
     finally:
         cfg.unload()

@@ -27,21 +27,22 @@ from fbgtk import *
 from gi.repository import Gtk, GLib
 from gi.repository.GdkPixbuf import Pixbuf
 
+from sys import stderr
 
-LOGO_SIZE = WIDGET_BASE_UNIT * 10
+
+LOGO_SIZE = Gtk.IconSize.lookup(Gtk.IconSize.DIALOG)[1] * 3
 
 
 class AboutDialog():
     ICONNAME = 'flibrowser2.svg'
 
-    def __init__(self, parentwnd, resldr):
+    def __init__(self, resldr, uibldr):
         """Создание и первоначальная настройка.
 
-        parentwnd   - экземпляр Gtk.Window или None,
-        resldr      - экземпляр fbgtk.ResourceLoader."""
+        resldr      - экземпляр fbgtk.ResourceLoader,
+        uibldr      - экземпляр Gtk.Builder."""
 
-        self.dlgabout = Gtk.AboutDialog(parent=parentwnd)
-            #, use_header_bar=True) - странно ведёт себя не в GNOME
+        self.dlgabout = uibldr.get_object('dlgAbout')
 
         try:
             logo = resldr.load_bytes(self.ICONNAME)
@@ -49,12 +50,11 @@ class AboutDialog():
             self.windowicon = resldr.pixbuf_from_bytes(logo, LOGO_SIZE, LOGO_SIZE)
 
         except Exception as ex:
-            print('Не удалось загрузить файл изображения "%s" - %s' % (self.ICONNAME, repr(ex)))
+            print('Не удалось загрузить файл изображения "%s" - %s' % (self.ICONNAME, repr(ex)), file=stderr)
             self.windowicon = load_system_icon('gtk-find', LOGO_SIZE, True)
 
         #self.dlgabout.set_icon(self.windowicon)
 
-        self.dlgabout.set_size_request(WIDGET_BASE_UNIT * 48, WIDGET_BASE_UNIT * 32)
         self.dlgabout.set_copyright(COPYRIGHT)
         self.dlgabout.set_version('версия %s' % VERSION)
         self.dlgabout.set_program_name(TITLE)
@@ -86,7 +86,8 @@ def main():
 
     from fbenv import Environment
     ldr = get_resource_loader(Environment())
-    AboutDialog(None, ldr).run()
+    uibldr = ldr.load_gtk_builder('flibrowser2.ui')
+    AboutDialog(ldr, uibldr).run()
 
 if __name__ == '__main__':
     exit(main())

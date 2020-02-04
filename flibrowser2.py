@@ -18,7 +18,6 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>."""
 
-
 from fbgtk import *
 
 from gi.repository import Gtk, Gdk, GObject, Pango
@@ -126,172 +125,107 @@ class MainWnd():
         self.progressbar.set_fraction(fraction)
         self.task_events()
 
+    def mnuFileAbout_activate(self, wgt):
+        self.dlgabout.run()
+
+    def mnuFileImport_activate(self, wgt):
+        self.import_library(True)
+
+    def mnuFileSettings_activate(self, wgt):
+        self.change_settings()
+
+    def mnuBooksRandomChoice_activate(self, wgt):
+        self.random_book_choice()
+
+    def mnuBooksExtract_activate(self, wgt):
+        self.extract_books()
+
+    def mnuBooksSearch_activate(self, wgt):
+        self.search_books()
+
+    def mnuBooksSearchAuthor_activate(self, wgt):
+        self.search_this_author()
+
+    def mnuBooksSearchTitle_activate(self, wgt):
+        self.search_this_title()
+
+    def mnuBooksSearchSeries_activate(self, wgt):
+        self.search_this_series()
+
+    def btnextract_clicked(self, btn):
+        self.extract_books()
+
     def __create_ui(self):
         self.windowMaximized = False
         self.windowStateLoaded = False
 
-        self.window = Gtk.ApplicationWindow()
-        self.window.connect('configure_event', self.wnd_configure_event)
-        self.window.connect('window_state_event', self.wnd_state_event)
-        self.window.connect('destroy', self.destroy)
+        self.resldr = get_resource_loader(self.env)
+        uibldr = self.resldr.load_gtk_builder('flibrowser2.ui')
 
-        headerbar = Gtk.HeaderBar()
-        headerbar.set_show_close_button(True)
-        headerbar.set_decoration_layout('menu:minimize,maximize,close')
+        self.window = uibldr.get_object('wndMain')
+
+        headerbar = uibldr.get_object('headerBar')
         headerbar.set_title(TITLE)
         headerbar.set_subtitle('v%s' % VERSION)
 
-        self.resldr = get_resource_loader(self.env)
+        self.dlgabout = AboutDialog(self.resldr, uibldr)
 
-        self.window.set_titlebar(headerbar)
-
-        #self.window.set_title(TITLE_VERSION)
-
-        self.window.set_size_request(100 * WIDGET_BASE_UNIT, 76 * WIDGET_BASE_UNIT)
-        self.window.set_border_width(WIDGET_SPACING)
-
-        self.resldr = get_resource_loader(self.env)
-
-        self.dlgabout = AboutDialog(self.window, self.resldr)
-        self.dlgsetup = SetupDialog(self.window, self.env, self.cfg)
+        self.dlgsetup = SetupDialog(self.env, self.cfg, uibldr)
 
         self.window.set_default_icon(self.dlgabout.windowicon)
         self.window.set_icon(self.dlgabout.windowicon)
 
-        #
-        # начинаем напихивать виджеты
-        #
-
-        rootvbox = Gtk.VBox(spacing=WIDGET_SPACING)
-        self.window.add(rootvbox)
-
-        self.tasksensitivewidgets = []
         # список виджетов, которые должны блокироваться между вызовами task_begin/task_end
+        self.tasksensitivewidgets = []
 
         # всё, кроме прогрессбара, кладём сюда, чтоб блокировать разом
-        self.ctlvbox = Gtk.VBox(spacing=WIDGET_SPACING)
-        rootvbox.pack_start(self.ctlvbox, True, True, 0)
-
+        self.ctlvbox = uibldr.get_object('ctlvbox')
         self.tasksensitivewidgets.append(self.ctlvbox)
+
+        #-----------------------------------------------------------#
+        # начинаем напихивать динамически создаваемые виджеты,      #
+        # которые по разным причинам нельзя было нарисовать в Glade #
+        #-----------------------------------------------------------#
+
 
         #
         # меню
         #
 
-        # костыль для виндового порта GTK 3
-        # задолбали гномеры всё подряд deprecated объявлять!
-        #Gtk.Settings.get_default().props.gtk_menu_images = True
+        #TODO разобраться с блокировкой меню между вызовами task_begin/task_end
+        #mainmenu = uibldr.get_object('mnuMain')
+        #self.tasksensitivewidgets.append(mainmenu)
 
-        #
-        # плевал я, что deprecated.
-        # Gtk.Builder и уёбищным говноблёвом под названием Glade пользоваться не буду
-        #
+        self.mnuitemExtractBooks = uibldr.get_object('mnuBooksExtract')
+        self.mnuitemSearchBooks = uibldr.get_object('mnuBooksSearch')
 
-        actions = Gtk.ActionGroup.new('ui')
-        actions.add_actions(
-            # action-name,stock-id,label,accel,toltip,callback
-            (('file', None, 'Файл', None, None, None),
-                ('fileAbout', Gtk.STOCK_ABOUT, 'О программе',
-                    '<Alt>F1', 'Информация о программе', lambda b: self.dlgabout.run()),
-                ('fileImport', Gtk.STOCK_REFRESH, 'Импорт библиотеки',
-                    None, 'Импорт индексного файла (INPX) библиотеки', lambda b: self.import_library(True)),
-                ('fileSettings', Gtk.STOCK_PREFERENCES, 'Настройка',
-                    None, 'Настройка программы', lambda b: self.change_settings()),
-                ('fileExit', Gtk.STOCK_QUIT, 'Выход',
-                    '<Control>q', 'Завершить программу', self.destroy),
-            ('books', None, 'Книги', None, None, None),
-                ('booksRandomChoice', None, 'Случайный выбор',
-                    '<Control>r', 'Случайный выбор книги', lambda b: self.random_book_choice()),
-                ('booksExtract', Gtk.STOCK_SAVE, 'Извлечь',
-                    '<Control>e', 'Извлечь выбранные книги из библиотеки', lambda b: self.extract_books()),
-                #
-                ('booksSearch', Gtk.STOCK_FIND, 'Искать',
-                    '<Control>f', 'Искать книги в библиотеке', lambda b: self.search_books()),
-                ('booksSearchMenu', None, 'Искать...', None, None, None),
-                    ('booksSearchAuthor', None, 'Искать этого автора', None, None, lambda b: self.search_this_author()),
-                    ('booksSearchTitle', None, 'Искать с таким же названием книги', None, None, lambda b: self.search_this_title()),
-                    ('booksSearchSeries', None, 'Искать этот цикл/сериал', None, None, lambda b: self.search_this_series()),
-                ('booksFavoriteAuthors', None, 'Избранные авторы', None, None, None),
-                ('booksFavoriteSeries', None, 'Избранные сериалы/циклы', None, None, None),
-            ))
-
-        uimgr = Gtk.UIManager()
-        uimgr.insert_action_group(actions)
-        uimgr.add_ui_from_string(u'''<ui>
-            <menubar>
-                <menu name="mnuFile" action="file">
-                    <menuitem name="mnuFileAbout" action="fileAbout"/>
-                    <menuitem name="mnuFileImport" action="fileImport"/>
-                    <menuitem name="mnuFileSettings" action="fileSettings"/>
-                    <separator />
-                    <menuitem name="mnuFileExit" action="fileExit"/>
-                </menu>
-                <menu name="mnuBooks" action="books">
-                    <menuitem name="mnuBooksSearch" action="booksSearch"/>
-                    <menu name="mnuBooksSearchMenu" action="booksSearchMenu">
-                        <menuitem name="mnuBooksSearchByAuthor" action="booksSearchAuthor"/>
-                        <menuitem name="mnuBooksSearchByTitle" action="booksSearchTitle"/>
-                        <menuitem name="mnuBooksSearchBySeries" action="booksSearchSeries"/>
-                    </menu>
-                    <menuitem name="mnuBooksRandomChoice" action="booksRandomChoice"/>
-                    <menuitem name="mnuBooksExtract" action="booksExtract"/>
-                    <separator />
-                    <menu name="mnuBooksFavoriteAuthors" action="booksFavoriteAuthors" />
-                    <menu name="mnuBooksFavoriteSeries" action="booksFavoriteSeries" />
-                </menu>
-            </menubar>
-            </ui>''')
-
-        #self.tasksensitivewidgets.append(mnu)
-
-        mainmenu = uimgr.get_widget('/ui/menubar')
-        headerbar.pack_start(mainmenu)
-
-        self.window.add_accel_group(uimgr.get_accel_group())
-
-        self.mnuitemExtractBooks = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksExtract')
-        self.mnuitemSearchBooks = uimgr.get_widget('/ui/menubar/mnuFile/mnuBooksSearch')
-
-        self.mnuFavoriteAuthors = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteAuthors').get_submenu()
-        self.mnuFavoriteSeries = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksFavoriteSeries').get_submenu()
+        self.mnuFavoriteAuthors = uibldr.get_object('mnuBooksFavoriteAuthorsSubmenu')
+        self.mnuFavoriteSeries = uibldr.get_object('mnuBooksFavoriteSeriesSubmenu')
 
         # контекстное меню поиска по полям из списка найденных книг
-        self.mnuBooksSearchMenu = uimgr.get_widget('/ui/menubar/mnuBooks/mnuBooksSearchMenu').get_submenu()
+        self.mnuBooksSearchMenu = uibldr.get_object('mnuBooksSearchMenuSubmenu')
+
 
         #
         # морда будет из двух вертикальных панелей
         #
 
-        self.roothpaned = Gtk.HPaned()
-        self.roothpaned.set_wide_handle(True)
-        self.roothpaned.connect('notify::position', self.roothpaned_moved)
-        self.ctlvbox.pack_start(self.roothpaned, True, True, 0)
+        self.roothpaned = uibldr.get_object('roothpaned')
 
         self.booklist = None
         # а реальное значение сюда сунем потом.
         # ибо alphachooser будет дёргать MainWnd.update_books_*,
         # и на момент вызова поле MainWnd.booklist уже должно существовать
 
-        # символы для мнемоник быстрого перехода к виджетам (Alt+N)
-        fastlabel = iter('123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-
         #
         # в левой панели - алфавитные списки авторов и циклов
         #
 
-        fr, fl = create_labeled_frame('Выбор')
-        self.roothpaned.pack1(fr, True, False)
-
-        self.chooserpages = Gtk.Notebook()
-        self.chooserpages.set_border_width(WIDGET_SPACING)
-        self.chooserpages.set_size_request(WIDGET_BASE_UNIT*24, -1)
-        self.chooserpages.set_show_border(False)
-
-        fr.add(self.chooserpages)
-        fl.set_mnemonic_widget(self.chooserpages)
+        self.chooserpages = uibldr.get_object('chooserpages')
 
         # все "выбиральники"
         self.choosers = []
+
         # только те, которые можно использовать для случайного выбора
         self.rndchoosers = []
 
@@ -299,14 +233,15 @@ class MainWnd():
             SeriesAlphaListChooser,
             SearchFilterChooser)
 
-        for chooserclass in __chsrs:
+        for chooserix, chooserclass in enumerate(__chsrs, 1):
             chooser = chooserclass(self.lib, self.update_books_by_chooser)
 
             self.choosers.append(chooser)
             if chooser.RANDOM:
                 self.rndchoosers.append(chooser)
 
-            lab = Gtk.Label.new('_%s: %s' % (fastlabel.__next__(), chooserclass.LABEL))
+            # chooserix - номер для кнопки-акселератора
+            lab = Gtk.Label.new('_%d: %s' % (chooserix, chooserclass.LABEL))
             lab.set_use_underline(True)
 
             self.chooserpages.append_page(chooser.box, lab)
@@ -318,22 +253,18 @@ class MainWnd():
         self.choosers[self.CPAGE_SERIES].onfavoriteclicked = self.update_favorite_series
 
         self.curChooser = None
-        self.chooserpages.connect('switch-page', self.chooser_page_switched)
+
 
         #
         # в правой панели - список книг соотв. автора и управление распаковкой
         #
 
-        self.bookcount = Gtk.Label.new('0')
-        bookframe, bl = create_labeled_frame('_%s. Книги:' % fastlabel.__next__(), self.bookcount)
-        self.roothpaned.pack2(bookframe, True, False)
-
-        bpanel = Gtk.VBox(spacing=WIDGET_SPACING)
-        bpanel.set_size_request(WIDGET_BASE_UNIT * 30, -1) #!!!
-        bpanel.set_border_width(WIDGET_SPACING)
-        bookframe.add(bpanel)
+        self.bookcount = uibldr.get_object('bookcount')
 
         self.bookageicons = BookAgeIcons(Gtk.IconSize.MENU)
+
+        #TODO переделать booklist под Gtk.Builder
+        # TreeView и прочее пока создаём "вручную"
 
         # список книг
         self.booklist = TreeViewer(
@@ -360,9 +291,10 @@ class MainWnd():
                  )
             )
 
-        bl.set_mnemonic_widget(self.booklist.view)
+        booklistbox = uibldr.get_object('booklistbox')
+        booklistbox.pack_start(self.booklist.window, True, True, 0)
 
-        #print(self.booklist.colmap)
+        uibldr.get_object('booklistlabel').set_mnemonic_widget(self.booklist.view)
 
         # для всплывающих подсказок, зависящих от столбца
         self.booklist.view.connect('motion-notify-event', self.booklist_mouse_moved)
@@ -373,63 +305,32 @@ class MainWnd():
         self.booklist.selection.set_mode(Gtk.SelectionMode.MULTIPLE)
         self.booklist.selection.connect('changed', self.booklist_selected)
 
-        bpanel.pack_start(self.booklist.window, True, True, 0)
-
         # фильтрация списка книг по названию книги и названию цикла
-        blhbox = Gtk.HBox(spacing=WIDGET_SPACING)
-        bpanel.pack_start(blhbox, False, False, 0)
-
-        entry = create_labeled_entry(blhbox, 'Название:', self.booklisttitlepattern_changed, True)
-        entry_setup_clear_icon(entry)
+        booksearchentry = uibldr.get_object('booksearchentry')
+        entry_setup_clear_icon(booksearchentry)
 
         #
         # панель с виджетами извлечения книг
         #
 
-        self.selbookcount = Gtk.Label.new('0')
-        extractframe, efl = create_labeled_frame('_%s. Выбрано книг:' % fastlabel.__next__(), self.selbookcount)
-
-        xfbox = Gtk.HBox(spacing=WIDGET_SPACING)
-        xfbox.set_border_width(WIDGET_SPACING)
-        extractframe.add(xfbox)
-
-        self.ctlvbox.pack_start(extractframe, False, False, 0)
-
-        # внезапно, кнопка
-        self.btnextract = Gtk.Button.new_with_label('Извлечь')
-        self.btnextract.connect('clicked', lambda b: self.extract_books())
-        xfbox.pack_start(self.btnextract, False, False, 0)
+        self.selbookcount = uibldr.get_object('selbookcount')
+        self.btnextract = uibldr.get_object('btnextract')
 
         # выбор каталога
-        xfbox.pack_start(Gtk.Label.new('в каталог'), False, False, 0)
-        self.destdirchooser = Gtk.FileChooserButton.new('Выбор каталога для извлечения книг', Gtk.FileChooserAction.SELECT_FOLDER)
-
-        #!!!!
-        efl.set_mnemonic_widget(self.destdirchooser)
+        self.destdirchooser = uibldr.get_object('destdirchooser')
 
         self.destdirchooser.set_filename(self.cfg.get_param(self.cfg.EXTRACT_TO_DIRECTORY, os.path.expanduser('~')))
-        self.destdirchooser.set_create_folders(True)
-        self.destdirchooser.connect('selection-changed', self.dest_dir_changed)
 
-        xfbox.pack_start(self.destdirchooser, True, True, 0)
-
-        # как обзывать файлы
-        xfbox.pack_start(Gtk.Label.new(', назвав файлы по образцу'), False, False, 0)
-
-        self.extractfntemplatecb = Gtk.ComboBoxText()
+        # комбо-бокс шаблонов переименования
+        self.extractfntemplatecb = uibldr.get_object('extractfntemplatecb')
         for fntplix, fntpl in enumerate(fbfntemplate.templates):
             self.extractfntemplatecb.append_text(fntpl.DISPLAY)
 
         self.extractfntemplatecb.set_active(self.extractTemplateIndex)
-        self.extractfntemplatecb.connect('changed', self.extractfntemplatecb_changed)
 
-        xfbox.pack_start(self.extractfntemplatecb, True, True, 0)
-
-        self.extracttozipbtn = Gtk.CheckButton.new_with_label('и сжать ZIP')
+        # чекбокс "сжать zip"
+        self.extracttozipbtn = uibldr.get_object('extracttozipbtn')
         self.extracttozipbtn.set_active(self.cfg.get_param_bool(self.cfg.EXTRACT_PACK_ZIP, False))
-        self.extracttozipbtn.connect('clicked', self.extracttozipbtn_clicked)
-
-        xfbox.pack_start(self.extracttozipbtn, False, False, 0)
 
         #
         # прогрессбар (для распаковки и др.)
@@ -437,13 +338,9 @@ class MainWnd():
 
         # потому как Gtk.ProgressBar со "своим" текстом в случае свежего GTK
         # и многих тем этот текст рисует слишком малозаметно
-        self.labmsg = Gtk.Label()
-        self.labmsg.set_ellipsize(Pango.EllipsizeMode.END)
+        self.labmsg = uibldr.get_object('labmsg')
+        self.progressbar = uibldr.get_object('progressbar')
 
-        self.progressbar = Gtk.ProgressBar()
-        rootvbox.pack_end(self.progressbar, False, False, 0)
-
-        rootvbox.pack_end(self.labmsg, False, False, 0)
         #
         # заканчиваем напихивать виджеты
         #
@@ -452,6 +349,7 @@ class MainWnd():
 
         #print('loading window state')
         self.load_window_state()
+        uibldr.connect_signals(self)
 
     def __init__(self, lib, env, cfg):
         """Инициализация междумордия и загрузка настроек.
@@ -995,8 +893,9 @@ class MainWnd():
         self.search_by_selected_column(self.COL_BOOK_SERIES, SearchFilterChooser.FLD_SERTITLE)
 
     def update_books_by_chooser(self):
-        self.selectWhere = self.curChooser.selectWhere
-        self.update_books()
+        if self.curChooser is not None:
+            self.selectWhere = self.curChooser.selectWhere
+            self.update_books()
 
     def update_books(self):
         """Обновление списка книг."""

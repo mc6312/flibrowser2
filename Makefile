@@ -8,8 +8,9 @@ srcarcname = $(basename)-src$(arcx)
 backupdir = ~/shareddocs/pgm/python/
 zipname = $(basename).zip
 pysrcs = __main__.py $(basename).py fb*.py
-srcs = $(pysrcs) *.svg
+srcs = $(pysrcs) *.svg *.ui
 version = $(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')
+branch = $(shell git symbolic-ref --short HEAD)
 
 app:
 	zip -9 $(zipname) $(srcs)
@@ -24,7 +25,7 @@ distrib:
 	make icon
 	$(pack) $(basename)-$(version)$(arcx) $(basename) $(docs) $(basename).ico
 icon:
-	convert $(basename).svg $(basename).ico
+	convert -background transparent -density 256x256 $(basename).svg $(basename).ico
 backup:
 	make archive
 	mv $(srcarcname) $(backupdir)
@@ -43,3 +44,5 @@ docview:
 	#rm $(docname)
 todo:
 	pytodo.py $(pysrcs) >TODO
+show-branch:
+	@echo "$(version)-$(branch)"
