@@ -527,11 +527,11 @@ class SearchFilterChooser(FilterChooser):
         #
         hbox = Gtk.HBox(spacing=WIDGET_SPACING)
 
-        btnreset = Gtk.Button('Очистить')
+        btnreset = Gtk.Button.new_with_label('Очистить')
         btnreset.connect('clicked', lambda b: self.reset_entries())
         hbox.pack_start(btnreset, False, False, 0)
 
-        self.btnfind = Gtk.Button('Искать')
+        self.btnfind = Gtk.Button.new_with_label('Искать')
         self.btnfind.set_sensitive(False) # потом включится, после ввода значений
         self.btnfind.set_can_default(True)
         self.btnfind.connect('clicked', lambda b: self.do_search())
@@ -659,7 +659,7 @@ if __name__ == '__main__':
     lib = fblib.LibraryDB(env.libraryFilePath)
     lib.connect()
     try:
-        window = Gtk.ApplicationWindow(Gtk.WindowType.TOPLEVEL)
+        window = Gtk.ApplicationWindow()
         window.connect('destroy', lambda w: Gtk.main_quit())
 
         window.set_size_request(400, 800)

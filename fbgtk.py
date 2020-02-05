@@ -502,33 +502,70 @@ def set_widget_style(widget, css):
     dbsc.add_provider(dbsp, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
 
-class DateChooserDialog():
-    """Обёртка над Gtk.Dialog и Gtk.Calendar."""
+class DateChooserPopover():
+    """Обёртка над Gtk.Popover и Gtk.Calendar."""
 
-    def __init__(self, parentw, stitle):
+    def __init__(self, relativetowgt, onchange):
+        """ relativetowgt   - экземпляр Gtk.Widget,
+                              относительно которого вываливается Popover;
+            onchange        - None или метод, вызываемый при изменении
+                              даты и/или нажатии кнопки 'ОК'."""
+
         self.date = datetime.datetime.now().date()
+        self.onchange = onchange
 
-        self.dialog = Gtk.Dialog(stitle,
-            parentw,
-            Gtk.DialogFlags.MODAL|Gtk.DialogFlags.DESTROY_WITH_PARENT)
-        self.dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OK, Gtk.ResponseType.OK)
+        self.popover = Gtk.Popover.new(relativetowgt)
+        self.popover.set_position(Gtk.PositionType.RIGHT)
+
+        box = Gtk.Box.new(Gtk.Orientation.VERTICAL, WIDGET_SPACING)
+        box.set_border_width(WIDGET_SPACING)
+        self.popover.add(box)
 
         self.calendar = Gtk.Calendar()
+        self.calendar.connect('day-selected-double-click', self.btnOk_clicked)
+        self.calendar.connect('key-release-event', self.calendar_key_released)
+        box.pack_start(self.calendar, True, True, 0)
 
-        self.dialog.get_content_area().pack_start(self.calendar, True, True, 0)
+        btnbox = Gtk.Box.new(Gtk.Orientation.HORIZONTAL, WIDGET_SPACING)
+        box.pack_end(btnbox, False, False, 0)
 
-    def run(self):
-        self.dialog.show_all()
-        r = self.dialog.run()
-        self.dialog.hide()
+        btnCancel = Gtk.Button.new_with_label('Отмена')
+        btnCancel.connect('clicked', self.btnCancel_clicked)
+        btnbox.pack_start(btnCancel, False, False, 0)
 
-        if r == Gtk.ResponseType.OK:
-            d, m, y = self.calendar.get_date()
-            # вынимание - месяц тут от 0!
-            self.date = datetime.date(d, m + 1, y)
+        btnOk = Gtk.Button.new_with_label('OK')
+        btnOk.connect('clicked', self.btnOk_clicked)
+        btnbox.pack_end(btnOk, False, False, 0)
 
-        return r
+    def __date_is_changed(self):
+        year, month, day = self.calendar.get_date()
+        # у GTK месяцы 0..11, у питона - 1..12!
+        self.date = datetime.date(year, month + 1, day)
+        self.popover.hide()
+
+        if callable(self.onchange):
+            self.onchange()
+
+    def calendar_key_released(self, wgt, event):
+        # вот хренли Gtk.Calendar такой убогий?
+        if event.keyval in {Gdk.KEY_Return, Gdk.KEY_KP_Enter}:
+            self.__date_is_changed()
+            return True
+
+        return False
+
+    def btnOk_clicked(self, btn):
+        self.__date_is_changed()
+
+    def btnCancel_clicked(self, btn):
+        self.popover.hide()
+
+    def show(self, date):
+        self.date = date
+        self.calendar.select_month(date.month - 1, date.year)
+        self.calendar.select_day(date.day)
+        self.popover.show_all()
+        self.calendar.grab_focus()
 
 
 class DateChooser():
@@ -573,12 +610,12 @@ class DateChooser():
         self.checkbox = Gtk.CheckButton.new_with_label(labtxt)
         self.container.pack_start(self.checkbox, False, False, 0)
 
-        self.dropbtn = Gtk.Button('')
+        self.dropbtn = Gtk.Button.new_with_label('')
         self.dropbtn.connect('clicked', lambda b: self.choose_date())
         self.container.pack_end(self.dropbtn, False, False, 0)
 
-        self.dcdialog = DateChooserDialog(None, labtxt)
-        self.date = self.dcdialog.date
+        self.dcpopover = DateChooserPopover(self.dropbtn, self.__popover_date_changed)
+        self.date = self.dcpopover.date
 
         self.update_display()
 
@@ -606,14 +643,13 @@ class DateChooser():
             self.ondatechanged(self.date if self.dropbtn.get_sensitive() else None)
 
     def choose_date(self):
-        self.dcdialog.dialog.set_transient_for(self.dropbtn.get_toplevel())
-        # потому как на момент создания DateChooser окна могло еще не быть
+        self.dcpopover.show(self.date)
 
-        if self.dcdialog.run() == Gtk.ResponseType.OK:
-            self.date = self.dcdialog.date
-            self.update_display()
+    def __popover_date_changed(self):
+        self.date = self.dcpopover.date
+        self.update_display()
 
-            self.__date_changed()
+        self.__date_changed()
 
 
 def clear_menu(menu):
@@ -739,43 +775,32 @@ class ZipFileResourceLoader(FileResourceLoader):
 
 
 if __name__ == '__main__':
-    print('[test]')
+    print('[debugging %s]' % __file__)
 
-    grid = LabeledGrid()
-    grid.append_row('text text text test:')
-    grid.append_col(create_aligned_label('text', 1.0), True)
-    grid.append_row('text text test:')
-    grid.append_col(create_aligned_label('text2', 1.0), True)
-
-    msg_dialog(None, 'Dialog', 'Fuuu...', Gtk.MessageType.OTHER, widgets=(grid,))
-
-    exit(0)
-
-    window = Gtk.ApplicationWindow(Gtk.WindowType.TOPLEVEL)
-    window.connect('destroy', lambda w: Gtk.main_quit())
-
-    #window.set_size_request(800, -1)
-
-    def date_is_changed(date):
-        print(date)
-
-    chooser = DateChooser('хрень', ondatechanged=date_is_changed)
-    window.add(chooser.container)
-
-    window.show_all()
-    Gtk.main()
-
-
-    exit(0)
     import fbenv
-
-    clrs = BookAgeIcons(Gtk.IconSize.MENU)
-    #msg_dialog(None, 'Проверка', 'Проверка диалога')
-    exit(0)
 
     env = fbenv.Environment()
     ldr = get_resource_loader(env)
-    print('loader type:', type(ldr))
 
-    b = ldr.load_pixbuf('flibrowser-2.svg', 64, 64, 'gtk-find')
-    print('loaded:', b)
+    def __debug_date_chooser():
+        window = Gtk.ApplicationWindow()
+        window.set_size_request(WIDGET_BASE_UNIT * 64, WIDGET_BASE_UNIT * 32)
+        window.connect('destroy', lambda w: Gtk.main_quit())
+
+        #window.set_size_request(800, -1)
+
+        def date_is_changed(date):
+            print('date_is_changed:', date)
+
+        align = Gtk.Alignment.new(0.0, 0.5, 0.0, 0.0)
+        window.add(align)
+
+        chooser = DateChooser('хрень', ondatechanged=date_is_changed)
+        align.add(chooser.container)
+
+        window.show_all()
+        Gtk.main()
+
+    __debug_date_chooser()
+
+    exit(0)

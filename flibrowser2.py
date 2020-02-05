@@ -37,6 +37,7 @@ from collections import namedtuple
 
 import os.path
 import datetime
+from time import time
 
 from time import time, sleep
 from random import randrange
@@ -182,19 +183,12 @@ class MainWnd():
         self.ctlvbox = uibldr.get_object('ctlvbox')
         self.tasksensitivewidgets.append(self.ctlvbox)
 
-        #-----------------------------------------------------------#
-        # начинаем напихивать динамически создаваемые виджеты,      #
-        # которые по разным причинам нельзя было нарисовать в Glade #
-        #-----------------------------------------------------------#
-
-
         #
         # меню
         #
 
-        #TODO разобраться с блокировкой меню между вызовами task_begin/task_end
-        #mainmenu = uibldr.get_object('mnuMain')
-        #self.tasksensitivewidgets.append(mainmenu)
+        mainmenu = uibldr.get_object('mnuMain')
+        self.tasksensitivewidgets.append(mainmenu)
 
         self.mnuitemExtractBooks = uibldr.get_object('mnuBooksExtract')
         self.mnuitemSearchBooks = uibldr.get_object('mnuBooksSearch')
@@ -204,7 +198,6 @@ class MainWnd():
 
         # контекстное меню поиска по полям из списка найденных книг
         self.mnuBooksSearchMenu = uibldr.get_object('mnuBooksSearchMenuSubmenu')
-
 
         #
         # морда будет из двух вертикальных панелей
@@ -216,6 +209,11 @@ class MainWnd():
         # а реальное значение сюда сунем потом.
         # ибо alphachooser будет дёргать MainWnd.update_books_*,
         # и на момент вызова поле MainWnd.booklist уже должно существовать
+
+        #-----------------------------------------------------------#
+        # начинаем напихивать динамически создаваемые виджеты,      #
+        # которые по разным причинам нельзя было нарисовать в Glade #
+        #-----------------------------------------------------------#
 
         #
         # в левой панели - алфавитные списки авторов и циклов
@@ -412,7 +410,8 @@ class MainWnd():
         lastchooser = len(self.choosers) - 1
         if npage > lastchooser:
             npage = lastchooser
-        self.chooserpages.set_current_page(npage)
+
+        self.set_chooser_page(npage)
 
         self.unlock_update_books()
         #print('__init__() end')
@@ -515,6 +514,8 @@ class MainWnd():
 
         self.task_begin(S_IMPORT)
         try:
+            time0 = time()
+
             self.lib.cursor.executescript('''CREATE TEMPORARY TABLE oldbookids(bookid INTEGER PRIMARY KEY);
                 CREATE TEMPORARY TABLE oldauthorids(authorid INTEGER PRIMARY KEY);
                 CREATE TEMPORARY TABLE newbooks(bookid INTEGER PRIMARY KEY, favauthor INTEGER);''')
@@ -551,6 +552,11 @@ class MainWnd():
                 self.update_favorite_series()
 
                 # собираем некоторую статистику
+                time1 = time() - time0
+
+                secs = time1 % 60
+                mins = time1 // 60
+                print('  затрачено времени: %d:%.2d' % (mins, secs))
 
                 # получаем количества новых и удалённых книг
                 booksTotal = self.get_total_book_count()
@@ -672,12 +678,25 @@ class MainWnd():
         # сначала выбираем случайный выбиральник
 
         npage = randrange(len(self.rndchoosers))
-        self.chooserpages.set_current_page(npage)
+        self.set_chooser_page(npage)
 
         # выбираем случайный элемент в выбиральнике
         if self.choosers[npage].random_choice():
             # ...и случайную книгу в списке книг
             self.booklist.random_choice()
+
+    def set_chooser_page(self, npage):
+        self.chooserpages.set_current_page(npage)
+
+        self.window.set_default(self.curChooser.defaultWidget)
+
+        if self.curChooser.firstWidget is not None:
+            self.curChooser.firstWidget.grab_focus()
+
+    def search_books(self):
+        """Поиск книг по нескольким полям."""
+
+        self.set_chooser_page(self.CPAGE_SEARCH)
 
     def chooser_page_switched(self, nbook, page, pagenum):
         self.curChooser = self.choosers[pagenum]
@@ -685,10 +704,7 @@ class MainWnd():
 
         self.cfg.set_param_int(self.cfg.MAIN_WINDOW_CHOOSER_PAGE, pagenum)
 
-        self.window.set_default(self.curChooser.defaultWidget)
-
-        if self.curChooser.firstWidget is not None:
-            self.curChooser.firstWidget.grab_focus()
+        # переключение виджетов на вкладке перенесено в set_chooser_page()
 
     def update_favorites_menu(self, menu, favparams, truncfunc):
         """Обновление содержимого меню избранного.
@@ -855,11 +871,6 @@ class MainWnd():
 
         return self.lib.get_table_count('books')
 
-    def search_books(self):
-        """Поиск книг по нескольким полям."""
-
-        self.chooserpages.set_current_page(self.CPAGE_SEARCH)
-
     def search_by_selected_column(self, liststorecol, entryfldid):
         """Заполнение поля ввода с номером entryfldid
         (SearchFilterChooser.FLD_xxx) содержимым столбца
@@ -874,7 +885,9 @@ class MainWnd():
             entry = self.choosers[self.CPAGE_SEARCH].entries[entryfldid].entry
 
             entry.set_text(fldv)
-            self.chooserpages.set_current_page(self.CPAGE_SEARCH)
+            self.set_chooser_page(self.CPAGE_SEARCH)
+            # принудительно переключаем фокус на конкретное поле, т.к.
+            # set_chooser_page() переключает на первое
             entry.grab_focus()
 
     def search_this_author(self):
@@ -1001,9 +1014,10 @@ class MainWnd():
 
 def main():
     env = None
+    locked = False
 
     def remove_lock_file():
-        if env and os.path.exists(env.lockFilePath):
+        if env and locked and os.path.exists(env.lockFilePath):
             os.remove(env.lockFilePath)
 
     def handle_unhandled(exc_type, exc_value, exc_traceback):
@@ -1039,6 +1053,7 @@ def main():
 
     with open(env.lockFilePath, 'w+') as lockf:
         lockf.write('%s\n' % os.getpid())
+        locked = True
 
     try:
         cfg.load()
