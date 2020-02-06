@@ -48,6 +48,14 @@ filetype    строка; расширение имени файла/форма�
 FILTER_FIELD_BOOKID, FILTER_FIELD_TITLE, FILTER_FIELD_SERNO, \
     FILTER_FIELD_SERTITLE, FILTER_FIELD_DATE, FILTER_FIELD_AUTHORNAME = range(6)
 
+
+# костыль вместо использования регистро-зависимого оператора GLOB
+__LIKE_GLOB = ''.maketrans({'?':'_', '*':'%'})
+
+def str_like_glob(s):
+    return s.translate(__LIKE_GLOB)
+
+
 class FilterChooser():
     """Базовый класс для обёртки над виджетами фильтрации"""
 
@@ -256,30 +264,31 @@ class AlphaListChooser(FilterChooser):
             favnamecol = '%s.name' % self.FAVORITETABLENAME
             namecol = '%s.%s' % (self.NAMETABLENAME, self.COLNAMETEXT)
 
-            q = '''SELECT %s,%s,%s
+            if self.namePattern:
+                # фильтрация по начальным буквам имени автора.
+                # костыль вместо использования регистро-зависимого оператора GLOB
+                andq = ' AND ulower(%s) LIKE "%s%%"' % (namecol, self.namePattern)
+            else:
+                andq = ''
+
+            query = '''SELECT %s,%s,%s
                 FROM %s
                 LEFT JOIN %s ON %s=%s
-                WHERE %s="%s"
+                WHERE %s="%s"%s
                 ORDER BY %s;''' %\
                 (favnamecol, self.COLNAMEID, namecol,
                 self.NAMETABLENAME,
                 self.FAVORITETABLENAME, namecol, favnamecol,
-                self.COLALPHA, self.selectedAlpha,
+                self.COLALPHA, self.selectedAlpha, andq,
                 namecol)
-            #print(q)
+            #print(query)
 
-            cur = self.lib.cursor.execute(q)
+            cur = self.lib.cursor.execute(query)
 
             while True:
                 r = cur.fetchone()
                 if r is None:
                     break
-
-                # фильтрация по начальным буквам имени автора.
-                # вручную, ибо лень прикручивать collation к sqlite3
-
-                if self.namePattern and not r[F_TEXT].lower().startswith(self.namePattern):
-                    continue
 
                 # 2й элемент - Pixbuf, иконка "избранное/неизбранное"
                 self.namelist.store.append((r[F_ID],
@@ -341,7 +350,8 @@ class AlphaListChooser(FilterChooser):
         self.do_on_choosed()
 
     def nameentry_changed(self, entry, data=None):
-        self.namePattern = entry.get_text().strip().lower()
+        # костыль вместо использования регистро-зависимого оператора GLOB
+        self.namePattern = str_like_glob(entry.get_text().strip().lower())
         self.update_namelist()
 
     def random_choice(self):
@@ -447,8 +457,8 @@ class SearchFilterChooser(FilterChooser):
             if not self.value:
                 return ''
 
-            #v.lower()
-            return 'ulower(%s) LIKE "%%%s%%"' % (self.colname, self.value)
+            # костыль вместо использования регистро-зависимого оператора GLOB
+            return 'ulower(%s) LIKE "%%%s%%"' % (self.colname, str_like_glob(self.value))
 
         @staticmethod
         def str_to_valid_int(s):
@@ -667,10 +677,10 @@ if __name__ == '__main__':
         def fav_clicked():
             print('fav_clicked')
 
-        #chooser = AuthorAlphaListChooser(lib, __onchoosed)
-        #chooser.onfavoriteclicked = fav_clicked
-        #chooser.update()
-        chooser = SearchFilterChooser(lib, __onchoosed)
+        chooser = AuthorAlphaListChooser(lib, __onchoosed)
+        chooser.onfavoriteclicked = fav_clicked
+        chooser.update()
+        #chooser = SearchFilterChooser(lib, __onchoosed)
         window.add(chooser.box)
         window.set_default(chooser.defaultWidget)
 

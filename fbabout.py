@@ -30,11 +30,8 @@ from gi.repository.GdkPixbuf import Pixbuf
 from sys import stderr
 
 
-LOGO_SIZE = Gtk.IconSize.lookup(Gtk.IconSize.DIALOG)[1] * 3
-
-
 class AboutDialog():
-    ICONNAME = 'flibrowser2.svg'
+    ICONNAME = 'images/flibrowser2.svg'
 
     def __init__(self, resldr, uibldr):
         """Создание и первоначальная настройка.
@@ -44,14 +41,9 @@ class AboutDialog():
 
         self.dlgabout = uibldr.get_object('dlgAbout')
 
-        try:
-            logo = resldr.load_bytes(self.ICONNAME)
+        logoSize = Gtk.IconSize.lookup(Gtk.IconSize.DIALOG)[1] * 3
 
-            self.windowicon = resldr.pixbuf_from_bytes(logo, LOGO_SIZE, LOGO_SIZE)
-
-        except Exception as ex:
-            print('Не удалось загрузить файл изображения "%s" - %s' % (self.ICONNAME, repr(ex)), file=stderr)
-            self.windowicon = load_system_icon('gtk-find', LOGO_SIZE, True)
+        self.windowicon = resldr.load_pixbuf(self.ICONNAME, logoSize, logoSize, 'gtk-find')
 
         #self.dlgabout.set_icon(self.windowicon)
 
@@ -63,17 +55,20 @@ class AboutDialog():
         try:
             slicense = str(resldr.load('COPYING'), 'utf-8')
         except:
-            slicense = None
+            slicense = 'Файл с текстом GPL не найден.\nЧитайте https://www.gnu.org/licenses/gpl.html'
 
         #self.dlgabout.set_license_type(Gtk.License.GPL_3_0_ONLY)
         self.dlgabout.set_license_type(Gtk.License.GPL_3_0) #???
-        self.dlgabout.set_license(slicense if slicense else 'Файл с текстом GPL не найден.\nЧитайте https://www.gnu.org/licenses/gpl.html')
+        self.dlgabout.set_license(slicense)
 
         self.dlgabout.set_website(URL)
         self.dlgabout.set_website_label(URL)
 
-        self.dlgabout.add_credit_section('Сляпано во славу', ['Азатота', 'Йог-Сотота', 'Ктулху', 'Шаб-Ниггурат', 'и прочей кодлы Великих Древних'])
+        self.dlgabout.add_credit_section('Сляпано во славу',
+            ['Азатота', 'Йог-Сотота', 'Ктулху', 'Шаб-Ниггурат', 'Хастура', 'Тсаттоггуа', 'Гатаноа', 'Ран-Тегота', 'и прочих'])
         self.dlgabout.add_credit_section('Особая благодарность', ['Левой ноге автора'])
+
+        #abcontentbox = uibldr.get_object('abcontentbox')
 
     def run(self):
         self.dlgabout.show_all()

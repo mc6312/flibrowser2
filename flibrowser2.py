@@ -251,6 +251,7 @@ class MainWnd():
         self.choosers[self.CPAGE_SERIES].onfavoriteclicked = self.update_favorite_series
 
         self.curChooser = None
+        self.chooserChanged = False
 
 
         #
@@ -685,8 +686,17 @@ class MainWnd():
             # ...и случайную книгу в списке книг
             self.booklist.random_choice()
 
-    def set_chooser_page(self, npage):
-        self.chooserpages.set_current_page(npage)
+    def __chooser_changed(self, pagenum):
+        self.curChooser = self.choosers[pagenum]
+        self.curChooser.do_on_choosed()
+
+        self.cfg.set_param_int(self.cfg.MAIN_WINDOW_CHOOSER_PAGE, pagenum)
+
+    def set_chooser_page(self, pagenum):
+        self.chooserpages.set_current_page(pagenum)
+
+        if self.curChooser is None:
+            self.__chooser_changed(pagenum)
 
         self.window.set_default(self.curChooser.defaultWidget)
 
@@ -699,12 +709,9 @@ class MainWnd():
         self.set_chooser_page(self.CPAGE_SEARCH)
 
     def chooser_page_switched(self, nbook, page, pagenum):
-        self.curChooser = self.choosers[pagenum]
-        self.curChooser.do_on_choosed()
+        self.__chooser_changed(pagenum)
 
-        self.cfg.set_param_int(self.cfg.MAIN_WINDOW_CHOOSER_PAGE, pagenum)
-
-        # переключение виджетов на вкладке перенесено в set_chooser_page()
+        # переключение фокуса на firstWidget на вкладке перенесено в set_chooser_page()
 
     def update_favorites_menu(self, menu, favparams, truncfunc):
         """Обновление содержимого меню избранного.

@@ -8,7 +8,7 @@ srcarcname = $(basename)-src$(arcx)
 backupdir = ~/shareddocs/pgm/python/
 zipname = $(basename).zip
 pysrcs = __main__.py $(basename).py fb*.py
-srcs = $(pysrcs) *.svg *.ui
+srcs = $(pysrcs) *.svg *.ui COPYING
 version = $(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')
 branch = $(shell git symbolic-ref --short HEAD)
 
