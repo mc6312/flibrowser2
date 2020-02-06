@@ -8,7 +8,7 @@ srcarcname = $(basename)-src$(arcx)
 backupdir = ~/shareddocs/pgm/python/
 zipname = $(basename).zip
 pysrcs = __main__.py $(basename).py fb*.py
-srcs = $(pysrcs) *.svg *.ui COPYING
+srcs = $(pysrcs) images/* *.ui COPYING
 version = $(shell python3 -c 'from fbcommon import VERSION; print(VERSION)')
 branch = $(shell git symbolic-ref --short HEAD)
 
@@ -19,13 +19,13 @@ app:
 	chmod 755 $(basename)
 	rm $(zipname)
 archive:
-	$(pack) $(srcarcname) *.py *.svg Makefile *.sh *.ui *.geany $(docs)
+	$(pack) $(srcarcname) *.py images/* Makefile *.sh *.ui *.geany $(docs)
 distrib:
 	make app
 	make icon
 	$(pack) $(basename)-$(version)$(arcx) $(basename) $(docs) $(basename).ico
 icon:
-	convert -background transparent -density 256x256 $(basename).svg $(basename).ico
+	convert -background transparent -density 256x256 images/$(basename).svg $(basename).ico
 backup:
 	make archive
 	mv $(srcarcname) $(backupdir)
