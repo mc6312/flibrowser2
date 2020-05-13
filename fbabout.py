@@ -41,7 +41,7 @@ class AboutDialog():
 
         self.dlgabout = uibldr.get_object('dlgAbout')
 
-        logoSize = Gtk.IconSize.lookup(Gtk.IconSize.DIALOG)[1] * 3
+        logoSize = Gtk.IconSize.lookup(Gtk.IconSize.DIALOG)[1] * 4
 
         self.windowicon = resldr.load_pixbuf(self.ICONNAME, logoSize, logoSize, 'gtk-find')
 

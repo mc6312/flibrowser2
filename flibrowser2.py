@@ -3,7 +3,7 @@
 
 """ flibrowser2.py
 
-    Copyright 2018 MC-6312 <mc6312@gmail.com>
+    Copyright 2018-2020 MC-6312 <mc6312@gmail.com>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by

@@ -466,6 +466,29 @@ class SearchFilterChooser(FilterChooser):
 
             return i if i > 0 else None
 
+    class SearchFilterNameEntry(SearchFilterStrEntry):
+        """Специальный класс ввода строк для имён авторов"""
+
+        def __init__(self, entry, colname, onchange):
+            super().__init__(entry, colname, onchange)
+
+            self.filterchars = ''.maketrans('', '', '.,;')
+
+            # грязный хакЪ: чистка поля ввода нажатием левой иконки
+            # надо бы это действие засунуть в контекстное меню,
+            # но я пока не знаю, как изменять встроенное меню Gtk.Entry
+            entry.set_icon_from_icon_name(Gtk.EntryIconPosition.PRIMARY, 'tools-check-spelling')
+            entry.set_icon_activatable(Gtk.EntryIconPosition.PRIMARY, True)
+            entry.set_icon_tooltip_text(Gtk.EntryIconPosition.PRIMARY, 'Удаление лишних символов')
+            entry.connect('icon-press', self.__filter_value)
+
+        def __filter_value(self, entry, iconpos, event):
+            """Обработчик нажатия левой иконки поля ввода.
+            Удаление лишних пробелов и знаков препинания"""
+
+            if iconpos == Gtk.EntryIconPosition.PRIMARY:
+                entry.set_text(' '.join(filter(None, map(lambda s: s.strip(), entry.get_text().translate(self.filterchars).split(None)))))
+
     class SearchFilterIntEntry(SearchFilterStrEntry):
         def validate_value(self, s):
             try:
@@ -488,7 +511,7 @@ class SearchFilterChooser(FilterChooser):
         def get_where_param(self):
             return '' if not self.value else '%s IN (%s)' % (self.colname, ','.join(map(str, self.value)))
 
-    FLD_DEFS = (('Имя автора', 'authornames.name', -1, -1, True, SearchFilterStrEntry),
+    FLD_DEFS = (('Имя автора', 'authornames.name', -1, -1, True, SearchFilterNameEntry),
         ('Название книги', 'books.title', -1, -1, True, SearchFilterStrEntry),
         ('Название цикла/сериала', 'seriesnames.title', -1, -1, True, SearchFilterStrEntry),
         ('Id книги', 'books.bookid', -1, -1, True, SearchFilterIntListEntry))
@@ -677,10 +700,10 @@ if __name__ == '__main__':
         def fav_clicked():
             print('fav_clicked')
 
-        chooser = AuthorAlphaListChooser(lib, __onchoosed)
+        chooser = SearchFilterChooser(lib, __onchoosed)
+        #chooser = AuthorAlphaListChooser(lib, __onchoosed)
         chooser.onfavoriteclicked = fav_clicked
         chooser.update()
-        #chooser = SearchFilterChooser(lib, __onchoosed)
         window.add(chooser.box)
         window.set_default(chooser.defaultWidget)
 
