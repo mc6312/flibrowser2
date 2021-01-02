@@ -278,10 +278,10 @@ class MainWnd():
                 GObject.TYPE_STRING,# bookid as str
                 GObject.TYPE_STRING,# filetype
                 ),
-            (TreeViewer.ColDef(self.COL_BOOK_AUTHOR, 'Автор', False, True, markup=True, tooltip=self.COL_BOOK_AUTHOR),
-                TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True, markup=True, tooltip=self.COL_BOOK_TITLE),
+            (TreeViewer.ColDef(self.COL_BOOK_AUTHOR, 'Автор', False, True, tooltip=self.COL_BOOK_AUTHOR),
+                TreeViewer.ColDef(self.COL_BOOK_TITLE, 'Название', False, True, tooltip=self.COL_BOOK_TITLE),
                 TreeViewer.ColDef(self.COL_BOOK_SERNO, '#', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
-                TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True, markup=True),
+                TreeViewer.ColDef(self.COL_BOOK_SERIES, 'Цикл', False, True),
                 TreeViewer.ColDef(self.COL_BOOK_FILESIZE, 'Размер', False, False, 1.0, tooltip=self.COL_BOOK_SERIES),
                 TreeViewer.ColDef(self.COL_BOOK_ID_STR, 'Id', False, False, tooltip=self.COL_BOOK_SERIES),
                 TreeViewer.ColDef(self.COL_BOOK_FILETYPE, 'Тип', False, False, tooltip=self.COL_BOOK_SERIES),
@@ -979,10 +979,10 @@ class MainWnd():
                 datestr = flds.date.strftime(DISPLAY_DATE_FORMAT)
 
                 self.booklist.store.append((flds.bookid,
-                    markup_escape_text(flds.authorname, -1), # authornames.name
-                    markup_escape_text(flds.title, -1), # books.title
+                    flds.authorname, # authornames.name
+                    flds.title, # books.title
                     str(flds.serno) if flds.serno > 0 else '', # serno
-                    markup_escape_text(flds.sertitle, -1), # seriesnames.title
+                    flds.sertitle, # seriesnames.title
                     datestr, # date
                     dateicon, # age pixbuf
                     kilobytes_str(flds.filesize),
