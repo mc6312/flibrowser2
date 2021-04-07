@@ -419,13 +419,59 @@ class SearchFilterChooser(FilterChooser):
             self.entry = entry
             self.entry.connect('changed', self.entry_changed)
 
+            entry.connect('populate-popup', self.__on_populate_popup)
+
+            self.filterchars = ''.maketrans('', '', '.,;')
+
+            # чистка поля ввода от лишних символов нажатием левой иконки
+            entry.set_icon_from_icon_name(Gtk.EntryIconPosition.PRIMARY, 'tools-check-spelling')
+            entry.set_icon_activatable(Gtk.EntryIconPosition.PRIMARY, True)
+            entry.set_icon_tooltip_text(Gtk.EntryIconPosition.PRIMARY, 'Удаление лишних символов')
+            entry.connect('icon-press', self.entry_filter_value_by_icon)
+
             self.colname = colname
 
             self.value = None
 
             self.onchange = onchange
 
-        def clear(self):
+        def entry_filter_value(self, wgt):
+            self.entry.set_text(' '.join(filter(None, map(lambda s: s.strip(),
+                                                          self.entry.get_text().translate(self.filterchars).split(None)))))
+
+        def entry_filter_value_by_icon(self, entry, iconpos, event):
+            """Обработчик нажатия левой иконки поля ввода.
+            Удаление лишних пробелов и знаков препинания"""
+
+            if iconpos == Gtk.EntryIconPosition.PRIMARY:
+                self.entry_filter_value(self.entry)
+
+        def get_extra_menu_items(self):
+            """Метод вызывается из обработчика __on_populate_popup()
+            и должен возвращать список, содержащий кортежи из двух элементов:
+            ('текст пункта меню', метод_обработчик).
+            Метод может быть перекрыт в классе-потомке для добавления
+            дополнительных пунктов меню к возвращённым родительским
+            методом; если никакие пункты не нужны - можно возвращать
+            пустой список."""
+
+            return [('Очистить', self.clear),
+                    ('Убрать лишние символы', self.entry_filter_value)]
+
+        def __on_populate_popup(self, entry, menu):
+            mlst = self.get_extra_menu_items()
+
+            if mlst:
+                for ixpos, (title, handler) in enumerate(mlst):
+                    mi = Gtk.MenuItem.new_with_label(title)
+                    mi.connect('activate', handler)
+                    menu.insert(mi, ixpos)
+
+                menu.insert(Gtk.SeparatorMenuItem.new(), ixpos + 1)
+
+                menu.show_all()
+
+        def clear(self, widget=None):
             self.entry.set_text('')
 
         def entry_changed(self, entry):
@@ -472,22 +518,17 @@ class SearchFilterChooser(FilterChooser):
         def __init__(self, entry, colname, onchange):
             super().__init__(entry, colname, onchange)
 
-            self.filterchars = ''.maketrans('', '', '.,;')
+        def entry_xchange_names(self, wgt):
+            names = list(filter(None, self.entry.get_text().strip().split(',')))
+            if names:
+                for ixname, name in enumerate(names):
+                    names[ixname] = ' '.join(reversed(name.strip().split(None)))
 
-            # грязный хакЪ: чистка поля ввода нажатием левой иконки
-            # надо бы это действие засунуть в контекстное меню,
-            # но я пока не знаю, как изменять встроенное меню Gtk.Entry
-            entry.set_icon_from_icon_name(Gtk.EntryIconPosition.PRIMARY, 'tools-check-spelling')
-            entry.set_icon_activatable(Gtk.EntryIconPosition.PRIMARY, True)
-            entry.set_icon_tooltip_text(Gtk.EntryIconPosition.PRIMARY, 'Удаление лишних символов')
-            entry.connect('icon-press', self.__filter_value)
+                self.entry.set_text(', '.join(names))
 
-        def __filter_value(self, entry, iconpos, event):
-            """Обработчик нажатия левой иконки поля ввода.
-            Удаление лишних пробелов и знаков препинания"""
-
-            if iconpos == Gtk.EntryIconPosition.PRIMARY:
-                entry.set_text(' '.join(filter(None, map(lambda s: s.strip(), entry.get_text().translate(self.filterchars).split(None)))))
+        def get_extra_menu_items(self):
+            return super().get_extra_menu_items() +\
+                        [('Поменять местами имена и фамилии', self.entry_xchange_names)]
 
     class SearchFilterIntEntry(SearchFilterStrEntry):
         def validate_value(self, s):
@@ -511,11 +552,11 @@ class SearchFilterChooser(FilterChooser):
         def get_where_param(self):
             return '' if not self.value else '%s IN (%s)' % (self.colname, ','.join(map(str, self.value)))
 
+    # 'Текст метки', 'имя столбца в БД', макс_длина, ширина_в_символах, расширяемое, класс_виджета
     FLD_DEFS = (('Имя автора', 'authornames.name', -1, -1, True, SearchFilterNameEntry),
         ('Название книги', 'books.title', -1, -1, True, SearchFilterStrEntry),
         ('Название цикла/сериала', 'seriesnames.title', -1, -1, True, SearchFilterStrEntry),
         ('Id книги', 'books.bookid', -1, -1, True, SearchFilterIntListEntry))
-        #('Id книги', 'books.bookid', 8, 12, False, SearchFilterIntEntry))
 
     def __init__(self, lib, onchoosed):
         """Инициализация."""
