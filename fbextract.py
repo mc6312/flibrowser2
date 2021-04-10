@@ -57,6 +57,21 @@ class BookExtractor():
         self.env = env
         self.cfg = cfg
 
+    def get_extraction_dir(self):
+        """Берёт из настроек путь к каталогу извлечения книг,
+        возвращает кортеж из двух строк:
+        1. путь к каталогу извлечения, если таковой указан в настройках
+           и присутствует в файловой системе, иначе - пустая строка;
+        2. пустая строка, если с каталогом всё в порядке (см. выше),
+           или строка с сообщением об ошибке."""
+
+        extractdir = self.cfg.get_param(self.cfg.EXTRACT_TO_DIRECTORY)
+
+        if not extractdir or not os.path.exists(extractdir):
+            return ('', 'Каталог для извлекаемых книг не найден.')
+
+        return (extractdir, '')
+
     def extract(self, bookids, fntemplate=None, progress=None):
         """Извлекает книги.
         bookids         - список идентификаторов книг в БД
@@ -75,10 +90,9 @@ class BookExtractor():
         if not bookids:
             return None # ибо пустой список ошибкой не считаем
 
-        extractdir = self.cfg.get_param(self.cfg.EXTRACT_TO_DIRECTORY)
-
-        if not os.path.exists(extractdir):
-            return 'Каталог для извлекаемых книг не найден.'
+        extractdir, em = self.get_extraction_dir()
+        if em:
+            return em
 
         packtozip = self.cfg.get_param(self.cfg.EXTRACT_PACK_ZIP)
 

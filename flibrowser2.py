@@ -36,6 +36,7 @@ from fbchoosers import *
 from collections import namedtuple
 
 import os.path
+import subprocess
 import datetime
 from time import time
 
@@ -153,8 +154,25 @@ class MainWnd():
     def mnuBooksSearchSeries_activate(self, wgt):
         self.search_this_series()
 
+    def __copy_col_to_clipboard(self, col):
+        v = self.get_selected_column_value(col)
+        if v:
+            self.clipboard.set_text(v, -1)
+
+    def mnuBooksCopyAuthorName_activate(self, wgt):
+        self.__copy_col_to_clipboard(self.COL_BOOK_AUTHOR)
+
+    def mnuBooksCopyBookTitle_activate(self, wgt):
+        self.__copy_col_to_clipboard(self.COL_BOOK_TITLE)
+
+    def mnuBooksCopySeriesName_activate(self, wgt):
+        self.__copy_col_to_clipboard(self.COL_BOOK_SERIES)
+
     def btnextract_clicked(self, btn):
         self.extract_books()
+
+    def extractopenfmbtn_clicked(self, btn):
+        self.open_destination_dir()
 
     def __create_ui(self):
         self.windowMaximized = False
@@ -197,7 +215,7 @@ class MainWnd():
         self.mnuFavoriteSeries = uibldr.get_object('mnuBooksFavoriteSeriesSubmenu')
 
         # контекстное меню поиска по полям из списка найденных книг
-        self.mnuBooksSearchMenu = uibldr.get_object('mnuBooksSearchMenuSubmenu')
+        self.mnuBooksContextMenu = uibldr.get_object('mnuBooksContextMenuSubmenu')
 
         #
         # морда будет из двух вертикальных панелей
@@ -331,6 +349,14 @@ class MainWnd():
         self.extracttozipbtn = uibldr.get_object('extracttozipbtn')
         self.extracttozipbtn.set_active(self.cfg.get_param_bool(self.cfg.EXTRACT_PACK_ZIP, False))
 
+        # кнопка открытия каталога распаковки
+        # доступна, только если программа знает, какой в ОС файловый менеджер!
+        uibldr.get_object('extractopenfmbtn').set_sensitive(self.env.fileManager is not None)
+
+        # чекбокс "затем открыть каталог"
+        self.extractopenfmchkbtn = uibldr.get_object('extractopenfmchkbtn')
+        self.extractopenfmchkbtn.set_active(self.cfg.get_param_bool(self.cfg.EXTRACT_OPEN_DIRECTORY, False))
+
         #
         # прогрессбар (для распаковки и др.)
         #
@@ -345,6 +371,8 @@ class MainWnd():
         #
 
         self.window.show_all()
+
+        self.clipboard = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
 
         #print('loading window state')
         self.load_window_state()
@@ -784,8 +812,11 @@ class MainWnd():
         self.cfg.set_param(self.cfg.EXTRACT_FILE_NAMING_SCHEME,
             fbfntemplate.templates[self.extractTemplateIndex].NAME)
 
-    def extracttozipbtn_clicked(self, cb, data=None):
+    def extracttozipbtn_clicked(self, cb):
         self.cfg.set_param_bool(self.cfg.EXTRACT_PACK_ZIP, cb.get_active())
+
+    def extractopenfmchkbtn_toggled(self, cb):
+        self.cfg.set_param_bool(self.cfg.EXTRACT_OPEN_DIRECTORY, cb.get_active())
 
     def booklisttitlepattern_changed(self, entry, data=None):
         self.booklistTitlePattern = entry.get_text().strip().lower()
@@ -795,7 +826,7 @@ class MainWnd():
         # вываливаем контекстное меню только при непустом списке найденных книг
         # и при условии, что хотя бы один элемент списка выбран
         if self.booklist.store.iter_n_children(None) > 0 and self.booklist.selection.get_selected_rows()[1]:
-            self.mnuBooksSearchMenu.popup_at_pointer(event)
+            self.mnuBooksContextMenu.popup_at_pointer(event)
 
     def booklist_button_pressed(self, widget, event):
         if event.button == 3: # правая кнопка мыша
@@ -836,7 +867,7 @@ class MainWnd():
 
         nselbooks = len(self.booksSelected)
 
-        self.mnuBooksSearchMenu.set_sensitive(nselbooks > 0)
+        self.mnuBooksContextMenu.set_sensitive(nselbooks > 0)
 
         self.set_widgets_sensitive((self.btnextract, self.mnuitemExtractBooks), nselbooks > 0)
         #
@@ -844,6 +875,28 @@ class MainWnd():
 
     def dest_dir_changed(self, chooser):
         self.cfg.set_param(self.cfg.EXTRACT_TO_DIRECTORY, chooser.get_filename())
+
+    def open_destination_dir(self):
+        if self.env.fileManager is None:
+            return
+
+        et = 'Открытие каталога'
+
+        extractdir, em = self.extractor.get_extraction_dir()
+        if em:
+            msg_dialog(self.window, et, em)
+            return
+
+        cmd = [self.env.fileManager] + self.env.fileManagerPrefixArgs
+        cmd.append(extractdir)
+        cmd += self.env.fileManagerSuffixArgs
+
+        #print('running', ' '.join(cmd))
+        try:
+            subprocess.Popen(cmd)
+        except Exception as ex:
+            msg_dialog(self.window, et,
+                'При запуске файлового менеджера произошла ошибка:\n%s' % (str(ex)))
 
     def extract_books(self):
         """Извлечение выбранных в списке книг"""
@@ -873,10 +926,23 @@ class MainWnd():
             finally:
                 self.task_end()
 
+            if self.extractopenfmchkbtn.get_active():
+                self.open_destination_dir()
+
     def get_total_book_count(self):
         """Возвращает общее количество книг в БД"""
 
         return self.lib.get_table_count('books')
+
+    def get_selected_column_value(self, col):
+        """Получение значения из столбца в строке TreeView,
+        на которой находится курсор.
+        Если ничего не выбрано - возвращает пустую строку или None."""
+
+        # выясняем строку в списке, на который курсор, а не просто выбранную (т.к. м.б. множественный выбор)
+        path = self.booklist.view.get_cursor()[0]
+        if path is not None:
+            return self.booklist.store.get_value(self.booklist.store.get_iter(path), col)
 
     def search_by_selected_column(self, liststorecol, entryfldid):
         """Заполнение поля ввода с номером entryfldid
@@ -884,11 +950,8 @@ class MainWnd():
         из booklist.store с номером liststorecol и переключение
         на панель поиска по текстовым полям."""
 
-        # выясняем строку в списке, на который курсор, а не просто выбранную (т.к. м.б. множественный выбор)
-        path = self.booklist.view.get_cursor()[0]
-        if path is not None:
-            fldv = self.booklist.store.get_value(self.booklist.store.get_iter(path), liststorecol)
-
+        fldv = self.get_selected_column_value(liststorecol)
+        if fldv:
             entry = self.choosers[self.CPAGE_SEARCH].entries[entryfldid].entry
 
             entry.set_text(fldv)

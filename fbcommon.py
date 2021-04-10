@@ -20,7 +20,7 @@
 
 
 TITLE = 'Flibrowser'
-VERSION = '2.7.16'
+VERSION = '2.7.17'
 TITLE_VERSION = '%s v%s' % (TITLE, VERSION)
 COPYRIGHT = 'Copyright 2018-2021 MC-6312'
 URL = 'https://github.com/mc6312/flibrowser2'

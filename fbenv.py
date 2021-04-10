@@ -63,6 +63,32 @@ class Environment():
         self.appDir = os.path.split(self.appFilePath)[0]
 
         #
+        # параметры запуска файлового менеджера
+        #
+
+        sysname = system_name()
+
+        # исполняемый файл
+        # None, если операционная система неизвестна автору
+        # и соотв. не поддерживается
+
+        self.fileManager = None
+
+        if sysname == 'Linux':
+            # будем надеяться, что дистрибутив XDG-совместимый
+            self.fileManager = 'xdg-open'
+        elif sysname == 'Windows':
+            self.fileManager = 'explorer'
+        elif sysname == 'Darwin':
+            self.fileManager = 'finder'
+
+        # параметры, указываемые перед именем открываемого каталога
+        self.fileManagerPrefixArgs = []
+
+        # параметры, указываемые после имени открываемого каталога
+        self.fileManagerSuffixArgs = []
+
+        #
         # разгребаем командную строку
         #
         ENV_DETECT, ENV_APPDIR, ENV_HOME, ENV_CUSTOM = range(4)
@@ -114,7 +140,6 @@ class Environment():
             else:
                 # иначе ищем (или создаём) каталоги в недрах $HOME
 
-                sysname = system_name()
                 if sysname == 'Windows':
                     self.configDir = os.path.join(os.environ['APPDATA'], self.SUBDIR_NAME)
                     self.dataDir = self.configDir
@@ -206,6 +231,8 @@ class Settings(Database):
     EXTRACT_FILE_NAMING_SCHEME = 'extract_file_naming_scheme'
     # паковать ли извлекаемые книги
     EXTRACT_PACK_ZIP = 'extract_pack_zip'
+    # открывать ли целевой каталог после извлечения книг
+    EXTRACT_OPEN_DIRECTORY = 'extract_open_directory'
 
     # параметры/состояние интерфейса
     # координаты основного окна
